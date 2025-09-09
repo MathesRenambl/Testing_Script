@@ -1,6 +1,9 @@
+import dotenv from 'dotenv';
 const globalAmount = 10000;
 const fromDate = new Date("2025-09-08T00:00:00Z");
 const toDate = new Date("2025-09-10T23:59:59Z");
+
+dotenv.config();
 
 const fixedData = {
   apiKey: "M2hZZytlZU1vL3h0aWR2TXVoOUFhdTV1RmNRaWVnaGYxZ0Vpb0hBVmFKbz",
@@ -8,7 +11,7 @@ const fixedData = {
   PayerName: "Rahul Sharma",
 };
 
-const endpoint = "http://192.168.1.38:65235/temp/initiateTransaction"; 
+const endpoint = `${process.env.YAHVIPAY_ADMIN_BACKEND}/temp/initiateTransaction`; 
 
 // Helper to generate a random date between two dates
 function randomDate(start, end) {
@@ -93,5 +96,4 @@ export async function generateAndSendTransactions() {
   }
 }
 
-
-generateAndSendTransactions();
+generateAndSendTransactions()

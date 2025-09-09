@@ -14,7 +14,7 @@ export const useGetFetch = async (endPoint, query = {}, includeApiKey = true) =>
         const queryString = new URLSearchParams(query).toString();
         const url = `${Url}${endPoint}?${queryString}`;
 
-        console.log("Fetching:", url);
+        console.log("GET", url);
 
         const response = await fetch(url);
 
