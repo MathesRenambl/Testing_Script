@@ -53,7 +53,7 @@ function splitAmount(totalAmount) {
 }
 
 // Main function
-async function generateAndSendTransactions() {
+export async function generateAndSendTransactions() {
   const amounts = splitAmount(globalAmount);
   const payloads = [];
 
@@ -93,5 +93,5 @@ async function generateAndSendTransactions() {
   }
 }
 
-// Run the script
+
 generateAndSendTransactions();
