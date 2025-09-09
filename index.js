@@ -3,11 +3,12 @@ import { addCharge, allowMultipleAccount, isPincodeValid, isRegisteredBusiness, 
 
 dotenv.config();
 
-const apiKey = process.env.API_KEY;
+// const apiKey = process.env.API_KEY;
 const apiKey2 = process.env.API_KEY2;
 
-const phoneNumber = "8667223194";
+const phoneNumber = "8903469988";
 var createdMerchantId = "";
+var apiKey = "";
 
 function printSection(title, data) {
   console.log(`\n========== 📌 ${title.toUpperCase()} ==========\n`);
@@ -27,7 +28,7 @@ export async function Credentials() {
       const businessData = await isRegisteredBusiness(phoneNumber);
       printSection("Registered Business Response", businessData);
 
-      if (businessData.Success && businessData.Success.allowMultiFlag === 'yes') {
+      if (businessData.Success ) {
         const payLoad = {
           businessPhone: phoneNumber,
           token: generate.token,
@@ -40,6 +41,7 @@ export async function Credentials() {
         printSection("LoginAccountOTP Response", res);
 
         createdMerchantId = res.merchantId;
+        apiKey = res.apiKey;
       }
 
       const allowRequired = {

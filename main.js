@@ -1,8 +1,8 @@
 import {addCharges, BusinessVPA, Credentials,} from './index.js'
-import { generateAndSendTransactions } from './transaction.js';
+// import { generateAndSendTransactions } from './transaction.js';
 
 const functionMap={
-    Credentials,BusinessVPA,addCharges,generateAndSendTransactions,
+    Credentials,BusinessVPA,addCharges
 };
 
 // const functionName = process.argv[2];

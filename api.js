@@ -1,7 +1,7 @@
 import  {usePostFetch} from './usePostFetch.js'
 import {useGetFetch} from './useGetFetch.js'
 
-const apiKey = process.env.API_KEY;
+const apiKey = process.env.API_KEY2;
 // export const login = async (payLoad) => {
 //     const data = await usePostFetch("/admin/login", payLoad);
 //     return data;

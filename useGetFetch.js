@@ -4,7 +4,8 @@ import fetch from 'node-fetch';
 const Url = process.env.YAHVIPAY_ADMIN_BACKEND;
 
 export const useGetFetch = async (endPoint, query = {}, includeApiKey = true) => {
-     const apiKey = process.env.API_KEY;
+
+    const apiKey = process.env.API_KEY2;
     try {
         // Include API key in query if needed
         if (includeApiKey) {
