@@ -1,7 +1,7 @@
-import {BusinessVPA, Credentials,} from './index.js'
+import {addCharges, BusinessVPA, Credentials,} from './index.js'
 
 const functionMap={
-    Credentials,BusinessVPA
+    Credentials,BusinessVPA,addCharges,
 };
 
 const functionName = process.argv[2];

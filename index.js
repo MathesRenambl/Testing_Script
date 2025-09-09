@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { isPincodeValid, isRegisteredBusiness, login, loginAccountOTP, setBusinessVPA, updateAddressDetails, updateBusinessDetails, updateUserDetails, verifyFlags } from './api.js';
+import { addCharge, allowMultipleAccount, isPincodeValid, isRegisteredBusiness, login, loginAccountOTP, setBusinessVPA, updateAddressDetails, updateBusinessDetails, updateUserDetails, verifyFlags } from './api.js';
 dotenv.config();
 const apiKey = process.env.API_KEY;
 const apiKey2=process.env.API_KEY2;
@@ -19,10 +19,10 @@ const apiKey2=process.env.API_KEY2;
 //                 businessPhone: "7299700576"
 // })
 //     console.log(data3);
-
+const phoneNumber =8667223194;
 export async function Credentials () {
     try {
-        const phoneNumber = 8667223194
+        // const phoneNumber = 8667223194
         const generate = await login(phoneNumber);
         console.log(generate);
         console.log("--------------------------------------------------------------------------------------");
@@ -39,19 +39,28 @@ export async function Credentials () {
                 }
                 const res = await loginAccountOTP(payLoad);
                 console.log(res);
-                const pincode = "600028"
-                if (res.allowRegistration === "TRUE"){
-                    const bPin = await isPincodeValid(pincode);
-                    console.log(bPin); 
+                // const pincode = "600028"
+                // if (res.allowRegistration === "TRUE"){
+                //     const bPin = await isPincodeValid(pincode);
+                //     console.log(bPin); 
+                // }
+            } 
+
+            const allowRequired = {
+                    businessPhone:"8667223194",
+                    allowMultiLimit:10,
                 }
+
+                const MultipleAccount = await allowMultipleAccount(allowRequired);
+                console.log(MultipleAccount);
 
                 const required = {
                     businessPhone: "8667223194",
                     merchantId: "MC1750225933522", 
-                    name: "Test Business",
+                    name: "Gokul Business",
                     category: "Retail & Shopping",
                     subCategory: "Grocery Stores",
-                    pincode: pincode,
+                    pincode: "600028",
                     address: "123 Test Street, Chennai",
                     businessType: "FIXED",
                     mccCode: "5411"
@@ -59,10 +68,13 @@ export async function Credentials () {
                 const updateBusiness = await updateBusinessDetails(required);
                 console.log(updateBusiness);
 
+
+               
+
                 const userRequired = {
                     phoneNumber:"8667223194",
                     merchantId:"MC1750225933522",
-                    name:"Balaji",
+                    name:"Gokul",
                     phone:"9080355312",
                     dob:"2000-01-01",
                     address:"123 Test Street, Chennai"
@@ -88,7 +100,10 @@ export async function Credentials () {
                 }
                 const updateFlags = await verifyFlags(flagsRequired);
                 console.log(updateFlags);
-            } 
+
+
+
+                 
         }
     } catch (error) {
         console.error("An error occurred during the API flow:", error);
@@ -108,16 +123,35 @@ export async function BusinessVPA(){
       bankName:"KVB",
       verifiedType:"offline",
       activatedBy:"marketing",
-      uniqueId:"yahvipay.7299700576459@kvb",
-      apiKey:"M2hZZytlZU1vL3h0aWR2TXVoOUFhdTV1RmNRaWVnaGYxZ0Vpb0hBVmFKbz",
+      uniqueId:"yahvipay.7299700576451@kvb",
+      apiKey:apiKey2,
       merchantId:"MC1750225933522"
     }
+
     console.log(payLoad);
     const data = await setBusinessVPA(payLoad);
     console.log(data);
-
 }
 
+export async function addCharges(){
+    const merchantId="MC1750225933522";
+    const chargeName="Device";
+    const frequency="monthly";
+    const amount = "100"
+
+    const payLoad = {
+        apiKey:apiKey2,
+        businessPhone: "8667223194",
+        merchantId: merchantId,
+        chargeName: chargeName,
+        frequency: frequency,
+        amount: amount,
+    }
+    console.log(payLoad)
+    const data = await addCharge(payLoad);
+    console.log(data);
+
+}
 
 
 

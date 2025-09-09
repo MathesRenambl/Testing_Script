@@ -69,6 +69,10 @@ export const updateAddressDetails = async(payLoad) => {
 //     return data;
 // }
 
+export const allowMultipleAccount = async (payLoad) => {
+    const data = await usePostFetch("/business/allowMultipleAccount",payLoad);
+    return data;
+}
 export const verifyFlags = async(payLoad) => {
     const data = await usePostFetch("/setVerifyFlagsTemp",payLoad);
     return data;
@@ -77,6 +81,11 @@ export const verifyFlags = async(payLoad) => {
 
 export const setBusinessVPA = async(payLoad) => {
     const data = await usePostFetch("/business/setBusinessVPA", payLoad);
+    return data;
+}
+
+export const addCharge = async(payLoad) => {
+    const data = await usePostFetch("/business/addCharge", payLoad);
     return data;
 }
 
