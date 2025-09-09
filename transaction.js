@@ -8,7 +8,7 @@ const fixedData = {
   PayerName: "Rahul Sharma",
 };
 
-const endpoint = "http://192.168.1.38:65235/temp/initiateTransaction"; // Replace with real API URL
+const endpoint = "http://192.168.1.38:65235/temp/initiateTransaction"; 
 
 // Helper to generate a random date between two dates
 function randomDate(start, end) {
