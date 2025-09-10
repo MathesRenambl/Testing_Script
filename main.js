@@ -23,8 +23,8 @@ const functionMap={
 
 const main = async () => {
     await Credentials()
-    await BusinessVPA()
-    await addCharges()
+    // await BusinessVPA()
+    // await addCharges()
 }
 
 main()

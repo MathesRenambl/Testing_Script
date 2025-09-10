@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
-const globalAmount = 10000;
-const fromDate = new Date("2025-09-08T00:00:00Z");
-const toDate = new Date("2025-09-10T23:59:59Z");
+var globalAmount = 0;
+var fromDate = new Date("2025-09-10T00:00:00Z");
+var toDate = new Date("2025-09-10T23:59:59Z");
 
 dotenv.config();
 
@@ -21,12 +21,6 @@ function randomDate(start, end) {
 // Helper to generate random integer in range
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-// Helper to generate dummy VPA
-function generateVPA() {
-  const random = Math.floor(Math.random() * 1000000000);
-  return `yahvipay.${random}@kvb`;
 }
 
 // Helper to generate dummy reference IDs
@@ -56,7 +50,12 @@ function splitAmount(totalAmount) {
 }
 
 // Main function
-export async function generateAndSendTransactions() {
+export async function generateAndSendTransactions(vpa, startDate, endDate, amount) {
+
+    fromDate = startDate
+    toDate = endDate
+
+    globalAmount = amount
   const amounts = splitAmount(globalAmount);
   const payloads = [];
 
@@ -65,7 +64,7 @@ export async function generateAndSendTransactions() {
       KVBData: {
         ...fixedData,
         Amount: amount.toString(),
-        PayeeAddr: generateVPA(),
+        PayeeAddr: vpa,
         MerchantRefID: generateMerchantRefId("REF"),
         TransDate: randomDate(fromDate, toDate),
         RRN: generateRRN(),
@@ -95,5 +94,3 @@ export async function generateAndSendTransactions() {
     }
   }
 }
-
-generateAndSendTransactions()
