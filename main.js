@@ -1,9 +1,10 @@
-import {addCharges, BusinessVPA, Credentials,} from './index.js'
+// import {addCharges, BusinessVPA, Credentials,} from './index.js'
 // import { generateAndSendTransactions } from './transaction.js';
+import { setBusinessVPA } from './api.js';
 
-const functionMap={
-    Credentials,BusinessVPA,addCharges
-};
+// const functionMap={
+//     Credentials,BusinessVPA,addCharges
+// };
 
 // const functionName = process.argv[2];
 
@@ -21,10 +22,3 @@ const functionMap={
 //   console.error(`Error in ${functionName}:`, err.message);
 // }
 
-const main = async () => {
-    await Credentials()
-    await BusinessVPA()
-    await addCharges()
-}
-
-main()

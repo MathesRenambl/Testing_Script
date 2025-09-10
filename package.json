@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "dotenv": "^17.2.2",
+    "inquirer": "^12.9.4",
     "node-fetch": "^3.3.2"
   }
 }
