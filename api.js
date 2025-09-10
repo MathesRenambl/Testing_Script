@@ -88,14 +88,3 @@ export const addCharge = async(payLoad) => {
     const data = await usePostFetch("/business/addCharge", payLoad);
     return data;
 }
-
-
-
-
-
-
-
-
-
-
-

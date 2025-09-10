@@ -22,3 +22,8 @@ import { setBusinessVPA } from './api.js';
 //   console.error(`Error in ${functionName}:`, err.message);
 // }
 
+const main = async () => {
+    await Credentials()
+    // await BusinessVPA()
+    // await addCharges()
+}
