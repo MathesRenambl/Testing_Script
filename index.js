@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 import inquirer from 'inquirer';
 import { addCharge, allowMultipleAccount, isPincodeValid, isRegisteredBusiness, login, loginAccountOTP, setBusinessVPA, updateAddressDetails, updateBusinessDetails, updateUserDetails, verifyFlags } from './api.js';
-import { generateAndSendTransactions } from './transaction.js';
 
 dotenv.config();
 
@@ -116,64 +115,64 @@ export async function BusinessVPA(merchantId, apiCount) {
     storeVpa.push(payLoad.uniqueId)
 }
 
-export async function addCharges() {
-    for (const store of storeNameMerchantId) {
-        const { chargeType } = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'chargeType',
-                message: 'Select charge type:',
-                choices: chargeTypeOptions
-            }
-        ]);
+// export async function addCharges() {
+//     for (const store of storeNameMerchantId) {
+//         const { chargeType } = await inquirer.prompt([
+//             {
+//                 type: 'list',
+//                 name: 'chargeType',
+//                 message: 'Select charge type:',
+//                 choices: chargeTypeOptions
+//             }
+//         ]);
 
-        // Prompt user to select charge frequency
-        const { chargeFrequency } = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'chargeFrequency',
-                message: 'Select charge frequency:',
-                choices: chargeFrequencyOptions
-            }
-        ]);
+//         // Prompt user to select charge frequency
+//         const { chargeFrequency } = await inquirer.prompt([
+//             {
+//                 type: 'list',
+//                 name: 'chargeFrequency',
+//                 message: 'Select charge frequency:',
+//                 choices: chargeFrequencyOptions
+//             }
+//         ]);
 
-        // Prompt user to enter charge amount
-        const { amount } = await inquirer.prompt([
-            {
-                type: 'input',
-                name: 'amount',
-                message: 'Enter charge amount:',
-                validate: (input) => {
-                    // Ensure input is a number and greater than 0
-                    if (isNaN(input) || input <= 0) {
-                        return 'Please enter a valid positive number for the amount.';
-                    }
-                    chargeAmount = input; // Store the valid amount
-                    return true;
-                }
-            }
-        ]);
+//         // Prompt user to enter charge amount
+//         const { amount } = await inquirer.prompt([
+//             {
+//                 type: 'input',
+//                 name: 'amount',
+//                 message: 'Enter charge amount:',
+//                 validate: (input) => {
+//                     // Ensure input is a number and greater than 0
+//                     if (isNaN(input) || input <= 0) {
+//                         return 'Please enter a valid positive number for the amount.';
+//                     }
+//                     chargeAmount = input; // Store the valid amount
+//                     return true;
+//                 }
+//             }
+//         ]);
 
-        // If all values are provided, proceed with adding the charge
-        if (chargeType && chargeFrequency && amount > 0) {
-            const payLoad = {
-                apiKey: apiKey2,
-                businessPhone: phoneNumber,
-                merchantId: store.merchantId, // Use merchantId from store object
-                chargeName: chargeType,
-                frequency: chargeFrequency,
-                amount: chargeAmount
-            };
+//         // If all values are provided, proceed with adding the charge
+//         if (chargeType && chargeFrequency && amount > 0) {
+//             const payLoad = {
+//                 apiKey: apiKey2,
+//                 businessPhone: phoneNumber,
+//                 merchantId: store.merchantId, // Use merchantId from store object
+//                 chargeName: chargeType,
+//                 frequency: chargeFrequency,
+//                 amount: chargeAmount
+//             };
 
-            printSection("Add Charge Payload", payLoad);
+//             printSection("Add Charge Payload", payLoad);
 
-            const data = await addCharge(payLoad);
-            printSection("Add Charge Response", data);
-        } else {
-            console.log("All options are required.");
-        }
-    }
-}
+//             const data = await addCharge(payLoad);
+//             printSection("Add Charge Response", data);
+//         } else {
+//             console.log("All options are required.");
+//         }
+//     }
+// }
 
 export async function Credentials() {
     try {
@@ -334,31 +333,30 @@ export async function Credentials() {
                 }
             }
         }
-        if(storeNameMerchantId.length) {
-            addCharges()
-        }
-        if(storeNameMerchantId.length) {
-            // Get today's date
-            const today = new Date();
 
-            // Set fromDate to today with current time in UTC
-            const fromDate = new Date(today.toISOString());
+        // if(storeNameMerchantId.length) {
+        //     // Get today's date
+        //     const today = new Date();
 
-            // Set toDate to today with 23:59:59.999 in UTC
-            const toDate = new Date(today);
-            toDate.setHours(23, 59, 59, 999); // Set time to 23:59:59.999
-            const toDateIso = new Date(toDate.toISOString());
+        //     // Set fromDate to today with current time in UTC
+        //     const fromDate = new Date(today.toISOString());
 
-            console.log("fromDate:", fromDate.toISOString());
-            console.log("toDate:", toDateIso.toISOString());
-            for (const vpa of storeVpa) {            
-                await generateAndSendTransactions(vpa, fromDate, toDate, 15000)
-            }
+        //     // Set toDate to today with 23:59:59.999 in UTC
+        //     const toDate = new Date(today);
+        //     toDate.setHours(23, 59, 59, 999); // Set time to 23:59:59.999
+        //     const toDateIso = new Date(toDate.toISOString());
 
-        }
+        //     console.log("fromDate:", fromDate.toISOString());
+        //     console.log("toDate:", toDateIso.toISOString());
+        //     for (const vpa of storeVpa) {            
+        //         await generateAndSendTransactions(vpa, fromDate, toDate, 15000)
+        //     }
+
+        // }
     } 
     catch (error) {
         console.error("❌ An error occurred during the API flow:", error);
     }
     return "✅ Done";
 }
+Credentials();

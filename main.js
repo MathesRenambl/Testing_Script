@@ -1,30 +1,19 @@
-import {addCharges, BusinessVPA, Credentials,} from './index.js'
-// import { generateAndSendTransactions } from './transaction.js';
+import { Credentials } from './index.js'
+import { addCharges } from './addCharges.js'
 
-const functionMap={
-    Credentials,BusinessVPA,addCharges
-};
-
-// const functionName = process.argv[2];
-
-// if (!functionName || !functionMap[functionName]) {
-//   console.error(`Invalid or missing function name: "${functionName}"`);
-//   console.log(' Available functions:', Object.keys(functionMap).join(', '));
-//   process.exit(1);
-// }
-// console.log(` Running function: ${functionName}`);
-
-// try {
-//   const result = await functionMap[functionName](); 
-//   console.log('Done:', result);
-// } catch (err) {
-//   console.error(`Error in ${functionName}:`, err.message);
-// }
 
 const main = async () => {
-    await Credentials()
-    // await BusinessVPA()
-    // await addCharges()
-}
+    const arg = process.argv[2]; // Get the first argument after "node main"
 
+    switch (arg) {
+        case 'create-shop':
+            await Credentials();
+            break;
+        case 'add-charges':
+            await addCharges();
+            break;
+        default:
+            console.log('Usage: node main [Credentials|addCharges]');
+    }
+}
 main()
