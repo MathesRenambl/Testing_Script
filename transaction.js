@@ -55,11 +55,32 @@ function splitAmount(totalAmount) {
     return splits;
 }
 
-// Main function
-async function generateAndSendTransactions(vpa, startDate, endDate, amount) {
+function istToUtc(istDateTime) {
+    // Example input:
+    // "2025-09-12 22:15:30" (24h) OR "2025-09-12 10:15:30 PM" (12h)
 
-    fromDate = startDate
-    toDate = endDate
+    let [datePart, timePart, meridian] = istDateTime.trim().split(" ");
+    const [year, month, day] = datePart.split("-").map(Number);
+    let [hours, minutes, seconds] = timePart.split(":").map(Number);
+
+    // Handle 12-hour format with AM/PM
+    if (meridian) {
+        meridian = meridian.toUpperCase();
+        if (meridian === "PM" && hours < 12) hours += 12;
+        if (meridian === "AM" && hours === 12) hours = 0;
+    }
+
+    // Construct UTC date (subtract IST offset 5h30m)
+    const date = new Date(Date.UTC(year, month - 1, day, hours - 5, minutes - 30, seconds));
+
+    return date.toISOString();
+}
+
+// Main function
+async function generateAndSendTransactions(vpa, fromDate, toDate, amount) {
+
+    // fromDate = startDate
+    // toDate = endDate
 
     globalAmount = amount
     const amounts = splitAmount(globalAmount);
@@ -151,22 +172,30 @@ export async function createTransactions() {
         }
     ]);
 
-    // Step 3: Get simple date input
-    const { dateInput } = await inquirer.prompt([
+    const { fromDateTime, toDateTime } = await inquirer.prompt([
         {
             type: 'input',
-            name: 'dateInput',
-            message: 'Enter date (YYYY-MM-DD):',
+            name: 'fromDateTime',
+            message: 'Enter from date and time (YYYY-MM-DD HH:MM:SS AM/PM):',
             validate: (input) => {
-                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-                return dateRegex.test(input) ? true : 'Invalid date format. Use YYYY-MM-DD.';
+                const dateTimeRegex = /^(?:\d{4}-\d{2}-\d{2}) (?:\d{1,2}:\d{2}:\d{2} (?:AM|PM))$/;
+                return dateTimeRegex.test(input) ? true : 'Invalid format. Use YYYY-MM-DD HH:MM:SS AM/PM.';
+            }
+        },
+        {
+            type: 'input',
+            name: 'toDateTime',
+            message: 'Enter to date and time (YYYY-MM-DD HH:MM:SS AM/PM):',
+            validate: (input) => {
+                const dateTimeRegex = /^(?:\d{4}-\d{2}-\d{2}) (?:\d{1,2}:\d{2}:\d{2} (?:AM|PM))$/;
+                return dateTimeRegex.test(input) ? true : 'Invalid format. Use YYYY-MM-DD HH:MM:SS AM/PM.';
             }
         }
     ]);
 
     // Convert input date to fromDate and toDate
-    const fromDate = new Date(`${dateInput}T00:00:00Z`);
-    const toDate = new Date(`${dateInput}T23:59:59Z`);
+    const fromDate = new Date(istToUtc(fromDateTime));
+    const toDate = new Date(istToUtc(toDateTime));
 
     // Debug log
     console.log("📅 From Date:", fromDate);
@@ -203,5 +232,4 @@ export async function createTransactions() {
         }
     }
 }
-
 createTransactions()

@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import inquirer from 'inquirer';
 import { addCharge, allowMultipleAccount, isPincodeValid, isRegisteredBusiness, login, loginAccountOTP, setBusinessVPA, updateAddressDetails, updateBusinessDetails, updateUserDetails, verifyFlags } from './api.js';
+import { generateAndSendTransactions } from './transaction.js';
 
 dotenv.config();
 
@@ -334,25 +335,25 @@ export async function Credentials() {
             }
         }
 
-        // if(storeNameMerchantId.length) {
-        //     // Get today's date
-        //     const today = new Date();
+        if(storeNameMerchantId.length) {
+            // Get today's date
+            const today = new Date();
 
-        //     // Set fromDate to today with current time in UTC
-        //     const fromDate = new Date(today.toISOString());
+            // Set fromDate to today with current time in UTC
+            const fromDate = new Date(today.toISOString());
 
-        //     // Set toDate to today with 23:59:59.999 in UTC
-        //     const toDate = new Date(today);
-        //     toDate.setHours(23, 59, 59, 999); // Set time to 23:59:59.999
-        //     const toDateIso = new Date(toDate.toISOString());
+            // Set toDate to today with 23:59:59.999 in UTC
+            const toDate = new Date(today);
+            toDate.setHours(23, 59, 59, 999); // Set time to 23:59:59.999
+            const toDateIso = new Date(toDate.toISOString());
 
-        //     console.log("fromDate:", fromDate.toISOString());
-        //     console.log("toDate:", toDateIso.toISOString());
-        //     for (const vpa of storeVpa) {            
-        //         await generateAndSendTransactions(vpa, fromDate, toDate, 15000)
-        //     }
+            console.log("fromDate:", fromDate.toISOString());
+            console.log("toDate:", toDateIso.toISOString());
+            for (const vpa of storeVpa) {            
+                await generateAndSendTransactions(vpa, fromDate, toDate, 15000)
+            }
 
-        // }
+        }
     } 
     catch (error) {
         console.error("❌ An error occurred during the API flow:", error);
