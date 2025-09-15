@@ -1,35 +1,58 @@
 import dotenv from 'dotenv';
-import inquirer from 'inquirer';
+import Papa from 'papaparse';
+import fs from 'fs';
 import { getAllUserAccounts } from './api.js';
 
-var globalAmount = 0;
-var phoneNumber;
-
-var fromDate = new Date("2025-09-10T00:00:00Z");
-var toDate = new Date("2025-09-10T23:59:59Z");
-var storeNameMerchantId = []
-const apiKey2 = process.env.API_KEY2;
 dotenv.config();
 
+// CSV file paths
+const INPUT_CSV_PATH = './input_config.csv';
+const TRANSACTIONS_OUTPUT_PATH = './transaction_payloads.csv';
+
+// Configuration
+var storeNameMerchantId = [];
+const apiKey2 = process.env.API_KEY2;
+var phoneNumber = "";
+
+// Store transaction payloads for CSV output
+const transactionPayloads = [];
+
+// Configuration object
+let config = {
+    merchants: []
+};
+
+// Fixed transaction data
 const fixedData = {
     apiKey: "M2hZZytlZU1vL3h0aWR2TXVoOUFhdTV1RmNRaWVnaGYxZ0Vpb0hBVmFKbz",
     Payeraddr: "chiyan@ybl",
     PayerName: "Rahul Sharma",
 };
 
-const endpoint = `${process.env.YAHVIPAY_ADMIN_BACKEND}/temp/initiateTransaction`; 
+const endpoint = `${process.env.YAHVIPAY_ADMIN_BACKEND}/temp/initiateTransaction`;
 
-// Helper to generate a random date between two dates
+function printSection(title, data) {
+    console.log(`\n========== 📌 ${title.toUpperCase()} ==========\n`);
+    console.log(JSON.stringify(data, null, 2));
+}
+
+function printProgress(current, total, message) {
+    const progress = `[${current}/${total}]`;
+    const borderLine = "=".repeat(60);
+    console.log(borderLine);
+    console.log(`${progress} ${message}`);
+    console.log(borderLine);
+}
+
+// Helper functions for transaction generation
 function randomDate(start, end) {
     return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime())).toISOString();
 }
 
-// Helper to generate random integer in range
 function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-// Helper to generate dummy reference IDs
 function generateMerchantRefId(prefix = "REF") {
     return `${prefix}${Math.floor(Math.random() * 1000000000)}`;
 }
@@ -41,13 +64,14 @@ function generateRRN() {
 function generateUpiTransID() {
     return `${Math.floor(Math.random() * 1000000000)}`;
 }
+
 // Function to split amount into random parts summing to total
 function splitAmount(totalAmount) {
     const splits = [];
     let remaining = totalAmount;
 
     while (remaining > 0) {
-        const next = Math.min(randomInt(500, 3000), remaining); // each split 500–3000
+        const next = Math.min(randomInt(100, 1000), remaining);
         splits.push(next);
         remaining -= next;
     }
@@ -55,57 +79,141 @@ function splitAmount(totalAmount) {
     return splits;
 }
 
-function istToUtc(istDateTime) {
-    // Example input:
-    // "2025-09-12 22:15:30" (24h) OR "2025-09-12 10:15:30 PM" (12h)
+// Function to read and parse input CSV file
+async function readInputCSV(filePath = INPUT_CSV_PATH) {
+    try {
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`Input CSV file not found at path: ${filePath}`);
+        }
 
-    let [datePart, timePart, meridian] = istDateTime.trim().split(" ");
-    const [year, month, day] = datePart.split("-").map(Number);
-    let [hours, minutes, seconds] = timePart.split(":").map(Number);
+        const csvData = fs.readFileSync(filePath, 'utf8');
+        
+        const parseResult = Papa.parse(csvData, {
+            header: true,
+            skipEmptyLines: true,
+            dynamicTyping: true,
+            delimitersToGuess: [',', ';', '\t']
+        });
 
-    // Handle 12-hour format with AM/PM
-    if (meridian) {
-        meridian = meridian.toUpperCase();
-        if (meridian === "PM" && hours < 12) hours += 12;
-        if (meridian === "AM" && hours === 12) hours = 0;
+        if (parseResult.errors.length > 0) {
+            console.error('CSV parsing errors:', parseResult.errors);
+        }
+
+        const merchants = [];
+        parseResult.data.forEach((row, index) => {
+            // Clean and extract data from row
+            const businessNumber = (row.businessNumber || row.phoneNumber || row.phone || '').toString().trim();
+            const transactionAmount = parseFloat(row.transactionAmount || row.transAmount || 0);
+            
+            // Validate business number format (10 digits)
+            if (businessNumber && /^\d{10}$/.test(businessNumber)) {
+                merchants.push({
+                    index: index + 1,
+                    businessNumber,
+                    transactionAmount: transactionAmount > 0 ? transactionAmount : 1000 // Default transaction amount
+                });
+            } else {
+                console.warn(`⚠️  Row ${index + 1}: Invalid business number '${businessNumber}' - skipping`);
+            }
+        });
+
+        config = { merchants };
+
+        console.log('\n📊 Input CSV Configuration loaded for transactions:');
+        console.log(`📱 Valid merchants: ${merchants.length}`);
+        merchants.forEach(m => {
+            console.log(`   ${m.businessNumber}: ₹${m.transactionAmount} transactions`);
+        });
+
+        return config;
+    } catch (error) {
+        console.error('❌ Error reading input CSV:', error.message);
+        throw error;
     }
-
-    // Construct UTC date (subtract IST offset 5h30m)
-    const date = new Date(Date.UTC(year, month - 1, day, hours - 5, minutes - 30, seconds));
-
-    return date.toISOString();
 }
 
-// Main function
-async function generateAndSendTransactions(vpa, fromDate, toDate, amount) {
+// Function to save transaction payloads to CSV
+async function saveTransactionPayloadsToCSV() {
+    try {
+        // Check if file exists and read existing data
+        let existingData = [];
+        if (fs.existsSync(TRANSACTIONS_OUTPUT_PATH)) {
+            const existingCsv = fs.readFileSync(TRANSACTIONS_OUTPUT_PATH, 'utf8');
+            const parsed = Papa.parse(existingCsv, { header: true });
+            existingData = parsed.data.filter(row => row.businessNumber && row.businessNumber.trim() !== '');
+        }
 
-    // fromDate = startDate
-    // toDate = endDate
+        // Combine existing and new data
+        const allData = [...existingData, ...transactionPayloads];
 
-    globalAmount = amount
-    const amounts = splitAmount(globalAmount);
+        // Convert to CSV
+        const csvData = Papa.unparse(allData, {
+            header: true,
+            columns: ['businessNumber', 'vpa', 'merchantId', 'shopName', 'amount', 'merchantRefID', 'transDate', 'rrn', 'upiTransID', 'createdAt', 'status', 'payload']
+        });
+
+        fs.writeFileSync(TRANSACTIONS_OUTPUT_PATH, csvData, 'utf8');
+        console.log(`✅ Transaction payloads saved to ${TRANSACTIONS_OUTPUT_PATH}`);
+        
+        // Also log the data for verification
+        console.log('\n📋 Generated Transaction Payloads:');
+        const newPayloads = transactionPayloads.slice(-transactionPayloads.length);
+        newPayloads.forEach((transaction, index) => {
+            console.log(`${index + 1}. Business: ${transaction.businessNumber} | VPA: ${transaction.vpa} | Amount: ₹${transaction.amount} | Status: ${transaction.status}`);
+        });
+        
+    } catch (error) {
+        console.error('❌ Error saving transaction payloads to CSV:', error.message);
+    }
+}
+
+// Main function to generate and send transactions
+async function generateAndSendTransactions(vpa, amount, businessNumber, merchantId, shopName) {
+    const now = new Date();
+    const startDate = new Date(now.getTime() - 2 * 60 * 60 * 1000); // 2 hours ago
+    const endDate = now;
+
+    const amounts = splitAmount(amount);
     const payloads = [];
 
-    for (let amount of amounts) {
-        const data = {
-        KVBData: {
-            ...fixedData,
-            Amount: amount.toString(),
-            PayeeAddr: vpa,
-            MerchantRefID: generateMerchantRefId("REF"),
-            TransDate: randomDate(fromDate, toDate),
-            RRN: generateRRN(),
-            UpiTransID: generateUpiTransID(),
-        },
+    for (let amt of amounts) {
+        const payload = {
+            KVBData: {
+                ...fixedData,
+                Amount: amt.toString(),
+                PayeeAddr: vpa,
+                MerchantRefID: generateMerchantRefId("REF"),
+                TransDate: randomDate(startDate, endDate),
+                RRN: generateRRN(),
+                UpiTransID: generateUpiTransID(),
+            },
         };
+        payloads.push(payload);
 
-        payloads.push(data);
+        // Store payload data for CSV
+        transactionPayloads.push({
+            businessNumber,
+            vpa,
+            merchantId,
+            shopName: shopName || 'N/A',
+            amount: amt,
+            merchantRefID: payload.KVBData.MerchantRefID,
+            transDate: payload.KVBData.TransDate,
+            rrn: payload.KVBData.RRN,
+            upiTransID: payload.KVBData.UpiTransID,
+            createdAt: new Date().toISOString(),
+            status: 'Pending',
+            payload: JSON.stringify(payload)
+        });
     }
 
-    console.log(payloads);
-    console.log(`✅ Generated ${payloads.length} payloads.`);
+    console.log(`✅ Generated ${payloads.length} transaction payloads for ${vpa}`);
+    printSection(`Generated Payloads for ${vpa}`, payloads);
 
     // Send them one by one
+    let successCount = 0;
+    let failCount = 0;
+
     for (let i = 0; i < payloads.length; i++) {
         try {
             const response = await fetch(endpoint, {
@@ -115,121 +223,160 @@ async function generateAndSendTransactions(vpa, fromDate, toDate, amount) {
                 },
                 body: JSON.stringify(payloads[i]),
             });
-            console.log(`✅ Sent payload ${i + 1}/${payloads.length}:`, response.status);
-        } 
-        catch (error) {
-            console.error(`❌ Error sending payload ${i + 1}:`, error.message);
+            
+            console.log(`✅ Sent payload ${i + 1}/${payloads.length} for ${vpa}: Status ${response.status}`);
+            
+            // Update status in stored payloads
+            const payloadIndex = transactionPayloads.length - payloads.length + i;
+            if (response.ok) {
+                transactionPayloads[payloadIndex].status = 'Success';
+                successCount++;
+            } else {
+                transactionPayloads[payloadIndex].status = 'Failed';
+                failCount++;
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error sending payload ${i + 1} for ${vpa}:`, error.message);
+            
+            // Update status in stored payloads
+            const payloadIndex = transactionPayloads.length - payloads.length + i;
+            transactionPayloads[payloadIndex].status = 'Error';
+            failCount++;
         }
     }
+
+    return { successCount, failCount, totalPayloads: payloads.length };
 }
 
-export async function createTransactions() {
+// Function to create transactions for all merchants of a phone number
+async function createTransactionsForMerchant(merchantConfig, merchantIndex, totalMerchants) {
+    try {
+        phoneNumber = merchantConfig.businessNumber;
+        printProgress(merchantIndex, totalMerchants, `GENERATING TRANSACTIONS FOR ${phoneNumber}`);
 
-    
-    const nowUTC = new Date(); // ✅ current time in UTC
-
-    const year = nowUTC.getUTCFullYear();
-    const month = String(nowUTC.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(nowUTC.getUTCDate()).padStart(2, '0');
-    // ✅ Use nowUTC as the startDate
-    const startDate = nowUTC;
-
-    // ✅ End of the same UTC day
-    const endDate = new Date(`${year}-${month}-${day}T23:59:59.999Z`);
-    console.log(startDate, endDate)
-    console.log("\n\n🔐 Starting Login Flow...");
+        const payload = {
+            businessPhone: phoneNumber,
+            apiKey: apiKey2
+        };
         
-    // Step 1: Get phone number from the user
-    const { phoneNo } = await inquirer.prompt([
-        {
-            type: 'input',
-            name: 'phoneNo',
-            message: 'Please enter your phone number:',
-            validate: (input) => {
-                const phonePattern = /^\d{10}$/;
-                if (phonePattern.test(input)) {
-                    phoneNumber = input;
-                    return true;
-                }
-                return 'Please enter a valid 10-digit phone number.';
+        printSection("Get All User Accounts Payload", payload);
+        const phoneByMerchant = await getAllUserAccounts(payload);
+        printSection("Get All User Accounts Response", phoneByMerchant);
+
+        if (phoneByMerchant.Success) {
+            const merchants = phoneByMerchant.Success.map((item, index) => ({
+                businessName: item.businessName,
+                merchantId: item.merchantId,
+                businessVPA: item.businessVPA
+            }));
+            
+            storeNameMerchantId = merchants;
+            console.log(`📊 Found ${merchants.length} merchants for ${phoneNumber}`);
+
+            if (merchantConfig.transactionAmount <= 100) {
+                console.log("❌ The transaction amount must be greater than 100.");
+                return;
             }
-        }
-    ]);
 
-    const { amount } = await inquirer.prompt([
-        {
-            type: 'input',
-            name: 'amount',
-            message: 'Enter charge amount:',
-            validate: (input) => {
-                // Ensure input is a number and greater than 0
-                if (isNaN(input) || input <= 100) {
-                    return 'Please enter a valid positive number for the amount.';
-                }
-                globalAmount = input; // Store the valid amount
-                return true;
-            }
-        }
-    ]);
+            let totalSuccess = 0;
+            let totalFailed = 0;
+            let totalPayloads = 0;
 
-    const { fromDateTime, toDateTime } = await inquirer.prompt([
-        {
-            type: 'input',
-            name: 'fromDateTime',
-            message: 'Enter from date and time (YYYY-MM-DD HH:MM:SS AM/PM):',
-            validate: (input) => {
-                const dateTimeRegex = /^(?:\d{4}-\d{2}-\d{2}) (?:\d{1,2}:\d{2}:\d{2} (?:AM|PM))$/;
-                return dateTimeRegex.test(input) ? true : 'Invalid format. Use YYYY-MM-DD HH:MM:SS AM/PM.';
-            }
-        },
-        {
-            type: 'input',
-            name: 'toDateTime',
-            message: 'Enter to date and time (YYYY-MM-DD HH:MM:SS AM/PM):',
-            validate: (input) => {
-                const dateTimeRegex = /^(?:\d{4}-\d{2}-\d{2}) (?:\d{1,2}:\d{2}:\d{2} (?:AM|PM))$/;
-                return dateTimeRegex.test(input) ? true : 'Invalid format. Use YYYY-MM-DD HH:MM:SS AM/PM.';
-            }
-        }
-    ]);
-
-    // Convert input date to fromDate and toDate
-    const fromDate = new Date(istToUtc(fromDateTime));
-    const toDate = new Date(istToUtc(toDateTime));
-
-    // Debug log
-    console.log("📅 From Date:", fromDate);
-    console.log("📅 To Date:", toDate);
-
-    phoneNumber = phoneNo
-    console.log(typeof phoneNumber)
-
-    if(phoneNumber) {
-        const Payload = {
-            businessPhone : phoneNumber,
-            apiKey : apiKey2
-        }
-        const phoneByMerchant = await getAllUserAccounts(Payload)
-        if(phoneByMerchant.Success) {
-            const id = phoneByMerchant.Success.map((item, index) => ({
-                businessName : item.businessName,
-                merchantId : item.merchantId,
-                businessVPA : item.businessVPA
-            }))
-            storeNameMerchantId = id
-            console.log(storeNameMerchantId)
-            if(amount <= 100) {
-                return console.log("The Total amount is not less then 100.");
-            }
-            for (const store of storeNameMerchantId) {
-                console.log(store.businessVPA)
+            // Generate transactions for each merchant
+            for (const store of merchants) {
+                console.log(`\n💳 Generating transactions for VPA: ${store.businessVPA}`);
                 
-                await generateAndSendTransactions(store.businessVPA, fromDate, toDate, amount)
+                const result = await generateAndSendTransactions(
+                    store.businessVPA, 
+                    merchantConfig.transactionAmount, 
+                    phoneNumber,
+                    store.merchantId,
+                    store.businessName
+                );
+                
+                totalSuccess += result.successCount;
+                totalFailed += result.failCount;
+                totalPayloads += result.totalPayloads;
+                
+                console.log(`✅ Completed transactions for ${store.businessVPA}: ${result.successCount}/${result.totalPayloads} successful`);
             }
+
+            console.log(`\n📊 Summary for ${phoneNumber}:`);
+            console.log(`   Total payloads: ${totalPayloads}`);
+            console.log(`   Successful: ${totalSuccess}`);
+            console.log(`   Failed: ${totalFailed}`);
+
+        } else {
+            console.log("❌ Error getting merchant accounts:", phoneByMerchant.Error);
         }
-        else {
-            console.log("Error : ", phoneByMerchant.Error)
-        }
+    } catch (error) {
+        console.error(`❌ Error processing transactions for ${phoneNumber}:`, error.message);
     }
 }
-createTransactions()
+
+// Main function to create transactions
+export async function createTransactions(csvFilePath = INPUT_CSV_PATH) {
+    try {
+        console.log("\n🚀 Starting Automated Transaction Generation...");
+        
+        // Read configuration from CSV
+        await readInputCSV(csvFilePath);
+        
+        if (config.merchants.length === 0) {
+            throw new Error("No valid merchants found in CSV file for transactions");
+        }
+        
+        console.log(`📱 Processing transactions for ${config.merchants.length} merchants`);
+        
+        // Process each merchant for transactions
+        for (let i = 0; i < config.merchants.length; i++) {
+            const merchant = config.merchants[i];
+            await createTransactionsForMerchant(merchant, i + 1, config.merchants.length);
+            
+            // Add delay between merchants to avoid rate limiting
+            if (i < config.merchants.length - 1) {
+                console.log("\n⏳ Waiting before processing next merchant...");
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+        
+        // Save transaction payloads to CSV
+        await saveTransactionPayloadsToCSV();
+        
+        // Final summary
+        const successfulTransactions = transactionPayloads.filter(t => t.status === 'Success').length;
+        const failedTransactions = transactionPayloads.filter(t => t.status !== 'Success').length;
+        
+        console.log("\n" + "=".repeat(80));
+        console.log("🎉 TRANSACTION GENERATION COMPLETED SUCCESSFULLY! 🎉");
+        console.log("=".repeat(80));
+        console.log(`📊 Summary:`);
+        console.log(`   📱 Merchants processed: ${config.merchants.length}`);
+        console.log(`   💳 Total transaction payloads: ${transactionPayloads.length}`);
+        console.log(`   ✅ Successful transactions: ${successfulTransactions}`);
+        console.log(`   ❌ Failed transactions: ${failedTransactions}`);
+        console.log(`   📁 Data saved to: ${TRANSACTIONS_OUTPUT_PATH}`);
+        
+        return {
+            success: true,
+            processed: config.merchants.length,
+            totalPayloads: transactionPayloads.length,
+            successfulTransactions,
+            failedTransactions,
+            outputFile: TRANSACTIONS_OUTPUT_PATH
+        };
+        
+    } catch (error) {
+        console.error("❌ Transaction generation failed:", error.message);
+        return {
+            success: false,
+            error: error.message,
+            totalPayloads: transactionPayloads.length
+        };
+    }
+}
+
+// Run the transaction automation
+const csvFilePath = process.argv[2] || INPUT_CSV_PATH;
+createTransactions(csvFilePath);

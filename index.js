@@ -1,41 +1,142 @@
 import dotenv from 'dotenv';
-import inquirer from 'inquirer';
-import { addCharge, allowMultipleAccount, isPincodeValid, isRegisteredBusiness, login, loginAccountOTP, setBusinessVPA, updateAddressDetails, updateBusinessDetails, updateUserDetails, verifyFlags } from './api.js';
-import { generateAndSendTransactions } from './transaction.js';
+import Papa from 'papaparse';
+import fs from 'fs';
+import { allowMultipleAccount, isRegisteredBusiness, login, loginAccountOTP, setBusinessVPA, updateAddressDetails, updateBusinessDetails, updateUserDetails, verifyFlags } from './api.js';
 
 dotenv.config();
 
-const allowMultiShopOptions = ["yes", "no"]
-const chargeTypeOptions = ["device", "loan"]
-const chargeFrequencyOptions = ["daily", "monthly", "onetime"]
-var chargeAmount;
 const storeNameMerchantId = [];
 const storeVpa = [];
 const apiKey2 = process.env.API_KEY2;
 var numberOfShopsCount;
-var phoneNumber = "8839868555";
+var phoneNumber = "";
 var createdMerchantId = "";
 var apiKey = "";
+
+// CSV file paths
+const INPUT_CSV_PATH = './input_config.csv';
+const MERCHANTS_OUTPUT_PATH = './created_merchants.csv';
+
+// Configuration object to store CSV data
+let config = {
+    merchants: []
+};
 
 function printSection(title, data) {
     console.log(`\n========== 📌 ${title.toUpperCase()} ==========\n`);
     console.log(JSON.stringify(data, null, 2));
 }
 
-function printShopCreationMessage(shopNumber) {
-    const message = `========== 📌 SHOP ${shopNumber} CREATED SUCCESSFULLY ==========`;
-
+function printShopCreationMessage(shopNumber, phoneNum) {
+    const message = `========== 📌 SHOP ${shopNumber} CREATED SUCCESSFULLY FOR ${phoneNum} ==========`;
     const borderLine = "=".repeat(message.length);
     console.log(borderLine); 
     console.log(message);
     console.log(borderLine);
 }
 
-const updateBusinessDetailsFunction = async (shopNumber, apiCount) => {
+function printPhoneProcessingMessage(phoneNum, index, total) {
+    const message = `========== 📱 PROCESSING PHONE NUMBER ${index}/${total}: ${phoneNum} ==========`;
+    const borderLine = "=".repeat(message.length);
+    console.log(borderLine); 
+    console.log(message);
+    console.log(borderLine);
+}
+
+// Function to read and parse input CSV file
+async function readInputCSV(filePath = INPUT_CSV_PATH) {
+    try {
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`Input CSV file not found at path: ${filePath}`);
+        }
+
+        const csvData = fs.readFileSync(filePath, 'utf8');
+        
+        const parseResult = Papa.parse(csvData, {
+            header: true,
+            skipEmptyLines: true,
+            dynamicTyping: true,
+            delimitersToGuess: [',', ';', '\t']
+        });
+
+        if (parseResult.errors.length > 0) {
+            console.error('CSV parsing errors:', parseResult.errors);
+        }
+
+        const merchants = [];
+        parseResult.data.forEach((row, index) => {
+            // Clean and extract data from row
+            const businessNumber = (row.businessNumber || row.phoneNumber || row.phone || '').toString().trim();
+            const noOfShops = parseInt(row.noOfShops || row.numberOfShops || row.shops || 1);
+            
+            // Validate business number format (10 digits)
+            if (businessNumber && /^\d{10}$/.test(businessNumber)) {
+                merchants.push({
+                    index: index + 1,
+                    businessNumber,
+                    noOfShops
+                });
+            } else {
+                console.warn(`⚠️  Row ${index + 1}: Invalid business number '${businessNumber}' - skipping`);
+            }
+        });
+
+        config = { merchants };
+
+        console.log('\n📊 Input CSV Configuration loaded:');
+        console.log(`📱 Valid merchants: ${merchants.length}`);
+        merchants.forEach(m => {
+            console.log(`   ${m.businessNumber}: ${m.noOfShops} shops`);
+        });
+
+        return config;
+    } catch (error) {
+        console.error('❌ Error reading input CSV:', error.message);
+        throw error;
+    }
+}
+
+// Function to save merchant data to CSV
+async function saveMerchantDataToCSV() {
+    try {
+        const csvData = [
+            ['businessNumber', 'shopName', 'merchantId', 'VPA', 'createdAt'],
+            ...storeNameMerchantId.map(store => [
+                store.phoneNumber,
+                store.storeName || `Business ${store.shopNumber} - ${store.phoneNumber}`,
+                store.merchantId,
+                storeVpa.find(vpa => vpa.includes(store.merchantId.slice(2))) || '',
+                new Date().toISOString()
+            ])
+        ];
+
+        const csv = Papa.unparse(csvData);
+        fs.writeFileSync(MERCHANTS_OUTPUT_PATH, csv, 'utf8');
+        console.log(`✅ Merchant data saved to ${MERCHANTS_OUTPUT_PATH}`);
+        
+        // Also log the data for verification
+        console.log('\n📋 Created Merchants Data:');
+        storeNameMerchantId.forEach((store, index) => {
+            const vpa = storeVpa.find(v => v.includes(store.merchantId.slice(2))) || 'N/A';
+            console.log(`${index + 1}. Business: ${store.phoneNumber} | Shop: ${store.storeName || 'Unnamed'} | Merchant ID: ${store.merchantId} | VPA: ${vpa}`);
+        });
+        
+    } catch (error) {
+        console.error('❌ Error saving merchant data to CSV:', error.message);
+    }
+}
+
+// Function to validate phone number format
+function validatePhoneNumber(phone) {
+    const phonePattern = /^\d{10}$/;
+    return phonePattern.test(phone.toString());
+}
+
+const updateBusinessDetailsFunction = async (shopNumber, apiCount, phoneNum) => {
     const businessDetailsPayload = {
-        businessPhone: phoneNumber,
+        businessPhone: phoneNum,
         merchantId: createdMerchantId,
-        name: `Gokul Business ${shopNumber}`,
+        name: `Business ${shopNumber} - ${phoneNum}`,
         category: "Retail & Shopping",
         subCategory: "Grocery Stores",
         pincode: "600028",
@@ -55,7 +156,7 @@ const updateUserDetailsFunction = async (phone, shopNumber, apiCount) => {
     const userDetailsPayload = {
         phoneNumber: phoneNumber,
         merchantId: createdMerchantId,
-        name: "Gokul",
+        name: "User",
         phone: `${phone}${shopNumber}`,
         dob: "2000-01-01",
         address: "123 Test Street, Chennai"
@@ -116,248 +217,160 @@ export async function BusinessVPA(merchantId, apiCount) {
     storeVpa.push(payLoad.uniqueId)
 }
 
-// export async function addCharges() {
-//     for (const store of storeNameMerchantId) {
-//         const { chargeType } = await inquirer.prompt([
-//             {
-//                 type: 'list',
-//                 name: 'chargeType',
-//                 message: 'Select charge type:',
-//                 choices: chargeTypeOptions
-//             }
-//         ]);
-
-//         // Prompt user to select charge frequency
-//         const { chargeFrequency } = await inquirer.prompt([
-//             {
-//                 type: 'list',
-//                 name: 'chargeFrequency',
-//                 message: 'Select charge frequency:',
-//                 choices: chargeFrequencyOptions
-//             }
-//         ]);
-
-//         // Prompt user to enter charge amount
-//         const { amount } = await inquirer.prompt([
-//             {
-//                 type: 'input',
-//                 name: 'amount',
-//                 message: 'Enter charge amount:',
-//                 validate: (input) => {
-//                     // Ensure input is a number and greater than 0
-//                     if (isNaN(input) || input <= 0) {
-//                         return 'Please enter a valid positive number for the amount.';
-//                     }
-//                     chargeAmount = input; // Store the valid amount
-//                     return true;
-//                 }
-//             }
-//         ]);
-
-//         // If all values are provided, proceed with adding the charge
-//         if (chargeType && chargeFrequency && amount > 0) {
-//             const payLoad = {
-//                 apiKey: apiKey2,
-//                 businessPhone: phoneNumber,
-//                 merchantId: store.merchantId, // Use merchantId from store object
-//                 chargeName: chargeType,
-//                 frequency: chargeFrequency,
-//                 amount: chargeAmount
-//             };
-
-//             printSection("Add Charge Payload", payLoad);
-
-//             const data = await addCharge(payLoad);
-//             printSection("Add Charge Response", data);
-//         } else {
-//             console.log("All options are required.");
-//         }
-//     }
-// }
-
-export async function Credentials() {
+// Process individual phone number with multiple shops
+async function processPhoneNumber(merchantConfig, merchantIndex, totalMerchants) {
     try {
-        console.log("\n\n🔐 Starting Login Flow...");
+        phoneNumber = merchantConfig.businessNumber;
+        printPhoneProcessingMessage(phoneNumber, merchantIndex, totalMerchants);
         
-        // Step 1: Get phone number from the user
-        const { phoneNo } = await inquirer.prompt([
-            {
-                type: 'input',
-                name: 'phoneNo',
-                message: 'Please enter your phone number:',
-                validate: (input) => {
-                    const phonePattern = /^\d{10}$/;
-                    if (phonePattern.test(input)) {
-                        phoneNumber = input;
-                        return true;
-                    }
-                    return 'Please enter a valid 10-digit phone number.';
-                }
-            }
-        ]);
+        // Create multiple shops for this phone number
+        for (let shopIndex = 1; shopIndex <= merchantConfig.noOfShops; shopIndex++) {
+            console.log(`\n🏪 Creating Shop ${shopIndex}/${merchantConfig.noOfShops} for ${phoneNumber}...`);
+            
+            printSection(`Login Payload ${shopIndex}`, phoneNumber);
+            const generate = await login(phoneNumber);
+            printSection(`Login Response ${shopIndex}`, generate);
 
-        phoneNumber = phoneNo
-        // Step 4: Ask if user wants to allow multiple shops
-        const { multiShopChoice } = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'multiShopChoice',
-                message: 'Do you want to allow Multiple Shop?',
-                choices: allowMultiShopOptions
-            }
-        ]);
-        if (multiShopChoice === "yes") {
-            const { numberOfShops } = await inquirer.prompt([
-                {
-                    type: 'input',
-                    name: 'numberOfShops',
-                    message: 'How many shops would you like to create? (Max 10)',
-                    validate: (input) => {
-                        const num = parseInt(input, 10);
-                        if (isNaN(num) || num <= 1 || num > 10) {
-                            return 'Please enter a number between 2 and 10.';
-                        }
-                        return true;
-                    }
-                }
-            ]);
-            numberOfShopsCount = numberOfShops
-        }
-        // else {
-        //     // If only one shop, proceed with the default logic
-        //     printSection("Single shop created for ", phoneNumber);
-        // }
-        printSection("Creating Shop 1...", phoneNumber)
-        printSection("Login Payload 1", phoneNumber);
-        const generate = await login(phoneNumber);
-        printSection("Login Response 1", generate);
+            if (generate.OTP === 'ok') {
+                printSection(`Registered Business Payload ${shopIndex}`, phoneNumber);
+                const businessData = await isRegisteredBusiness(phoneNumber);
+                printSection(`Registered Business Response ${shopIndex}`, businessData);
 
-        if (generate.OTP === 'ok') {
-            printSection("Registered Business Payload 1", phoneNumber);
-            const businessData = await isRegisteredBusiness(phoneNumber);
-            printSection("Registered Business Response 1", businessData);
+                const isNewBusiness = businessData.Success.allowMultiFlag === "new";
+                const canCreateMultiple = businessData.Success.allowMultiFlag === "yes";
 
-            if (businessData.Success.allowMultiFlag === "new") {
-                const payLoad = {
-                    businessPhone: phoneNumber,
-                    token: generate.token,
-                    businessName: "",
-                    permission: businessData.Success.allowMultiFlag
-                };
-                printSection("LoginAccountOTP Payload 1", payLoad);
-                const loginAccountOTPRes = await loginAccountOTP(payLoad);
-                printSection("LoginAccountOTP Response 1", loginAccountOTPRes);
-
-                createdMerchantId = businessData.Success.allowMultiFlag === "new" ? loginAccountOTPRes.merchantId : loginAccountOTPRes.newMerchantId;
-                storeNameMerchantId.push({
-                    merchantId: createdMerchantId,
-                    storeName : ""
-                })
-                apiKey = loginAccountOTPRes.apiKey;
-                
-                if(loginAccountOTPRes.verifyFlags.business === "no") {
-                    await updateBusinessDetailsFunction(1,1)
-                }
-                if(loginAccountOTPRes.verifyFlags.user === "no") {
-                    await updateUserDetailsFunction(phoneNumber.slice(0, 9), 1, 1)
-                }
-                if(loginAccountOTPRes.verifyFlags.location === "no") {
-                    await updateAddressDetailsFunction(1)
-                }
-                if(loginAccountOTPRes.verifyFlags.pan === "no" || loginAccountOTPRes.verifyFlags.bank === "no") {
-                    await verifyFlagsFunction()
-                }
-                if(multiShopChoice  === "yes") {
-                    await allowMultiFlagFunction()
-                }
-                await BusinessVPA(createdMerchantId.slice(2), 1)
-                // Example usage, passing the shop number
-                printShopCreationMessage(1);
-                console.log(storeNameMerchantId)
-                console.log(storeVpa)
-                // printSection("Shop 1 created successfully for 1", phoneNumber);
-            }
-            else {
-                console.log("Response : The AllowMultiFlag is no for 1")
-            }
-
-            for (let i = 2; i <= parseInt(numberOfShopsCount, 10); i++) {
-                printSection(`Creating Shop ${i}...`, phoneNumber);
-                const generate = await login(phoneNumber);
-                printSection("Login Response", generate);
-
-                if (generate.OTP === 'ok') {
-                    printSection("Registered Business Payload", phoneNumber);
-                    const businessData = await isRegisteredBusiness(phoneNumber);
-                    printSection("Registered Business Response", businessData);
+                if (isNewBusiness || canCreateMultiple) {
+                    const payLoad = {
+                        businessPhone: phoneNumber,
+                        token: generate.token,
+                        businessName: "",
+                        permission: businessData.Success.allowMultiFlag
+                    };
                     
-                    if (businessData.Success.allowMultiFlag === "yes") {
-                        const payLoad = {
-                            businessPhone: phoneNumber,
-                            token: generate.token,
-                            businessName: "",
-                            permission: businessData.Success.allowMultiFlag
-                        };
-                        printSection("LoginAccountOTP Payload", payLoad);
-                        const loginAccountOTPRes = await loginAccountOTP(payLoad);
-                        printSection("LoginAccountOTP Response", loginAccountOTPRes);
-                        
-                        createdMerchantId = businessData.Success.allowMultiFlag === "new" ? loginAccountOTPRes.merchantId : loginAccountOTPRes.newMerchantId;
-                        storeNameMerchantId.push({
-                            merchantId: createdMerchantId,
-                            storeName : ""
-                        })
-                        apiKey = loginAccountOTPRes.apiKey;
+                    printSection(`LoginAccountOTP Payload ${shopIndex}`, payLoad);
+                    const loginAccountOTPRes = await loginAccountOTP(payLoad);
+                    printSection(`LoginAccountOTP Response ${shopIndex}`, loginAccountOTPRes);
 
-                        if(loginAccountOTPRes.verifyFlags.business === "no" && createdMerchantId) {
-                            await updateBusinessDetailsFunction(i)
-                        }
-                        if(loginAccountOTPRes.verifyFlags.user === "no" && createdMerchantId) {
-                            await updateUserDetailsFunction(phoneNumber.slice(0, 9), i, i)
-                        }
-                        if(loginAccountOTPRes.verifyFlags.location === "no" && createdMerchantId) {
-                            await updateAddressDetailsFunction(i)
-                        }
-                        if(loginAccountOTPRes.verifyFlags.pan === "no" || loginAccountOTPRes.verifyFlags.bank === "no" && createdMerchantId) {
-                            await verifyFlagsFunction()
-                        }
-                        await BusinessVPA(createdMerchantId.slice(2), i)
+                    createdMerchantId = isNewBusiness ? loginAccountOTPRes.merchantId : loginAccountOTPRes.newMerchantId;
+                    storeNameMerchantId.push({
+                        merchantId: createdMerchantId,
+                        storeName: "",
+                        phoneNumber: phoneNumber,
+                        shopNumber: shopIndex
+                    });
+                    apiKey = loginAccountOTPRes.apiKey;
+                    
+                    // Update business details if needed
+                    if (loginAccountOTPRes.verifyFlags.business === "no") {
+                        await updateBusinessDetailsFunction(shopIndex, shopIndex, phoneNumber);
                     }
-                    else {
-                        console.log("Response : The AllowMultiFlag is no ")
+                    
+                    // Update user details if needed
+                    if (loginAccountOTPRes.verifyFlags.user === "no") {
+                        await updateUserDetailsFunction(phoneNumber.slice(0, 9), shopIndex, shopIndex);
                     }
-                    // You can replace this with actual API logic for creating shops
-                    // printSection(`Shop ${i} created successfully for `, phoneNumber);
-                    printShopCreationMessage(i);
-                    console.log(storeNameMerchantId)
-                    console.log(storeVpa)
+                    
+                    // Update address details if needed
+                    if (loginAccountOTPRes.verifyFlags.location === "no") {
+                        await updateAddressDetailsFunction(shopIndex);
+                    }
+                    
+                    // Verify flags if needed
+                    if (loginAccountOTPRes.verifyFlags.pan === "no" || loginAccountOTPRes.verifyFlags.bank === "no") {
+                        await verifyFlagsFunction();
+                    }
+                    
+                    // Allow multiple accounts for first shop only
+                    if (shopIndex === 1 && merchantConfig.noOfShops > 1) {
+                        await allowMultiFlagFunction();
+                    }
+                    
+                    // Set up Business VPA
+                    await BusinessVPA(createdMerchantId.slice(2), shopIndex);
+                    
+                    printShopCreationMessage(shopIndex, phoneNumber);
+                    
+                } else {
+                    console.log(`⚠️  Cannot create shop ${shopIndex} - AllowMultiFlag is 'no' for ${phoneNumber}`);
+                    break; // Stop creating more shops for this number
                 }
+            } else {
+                console.log(`❌ Login failed for ${phoneNumber}, shop ${shopIndex}`);
             }
+            
+            // Add small delay between shop creations
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
-
-        if(storeNameMerchantId.length) {
-            // Get today's date
-            const today = new Date();
-
-            // Set fromDate to today with current time in UTC
-            const fromDate = new Date(today.toISOString());
-
-            // Set toDate to today with 23:59:59.999 in UTC
-            const toDate = new Date(today);
-            toDate.setHours(23, 59, 59, 999); // Set time to 23:59:59.999
-            const toDateIso = new Date(toDate.toISOString());
-
-            console.log("fromDate:", fromDate.toISOString());
-            console.log("toDate:", toDateIso.toISOString());
-            for (const vpa of storeVpa) {            
-                await generateAndSendTransactions(vpa, fromDate, toDate, 15000)
-            }
-
-        }
-    } 
-    catch (error) {
-        console.error("❌ An error occurred during the API flow:", error);
+        
+        console.log(`\n✅ Completed processing ${phoneNumber}`);
+        console.log(`📊 Total stores created so far: ${storeNameMerchantId.length}`);
+        console.log(`📊 Total VPAs created so far: ${storeVpa.length}`);
+        
+    } catch (error) {
+        console.error(`❌ Error processing phone number ${phoneNumber}:`, error.message);
     }
-    return "✅ Done";
 }
-Credentials();
+
+// Main automation function for merchant creation
+export async function AutomatedMerchantCreation(csvFilePath = INPUT_CSV_PATH) {
+    try {
+        console.log("\n🚀 Starting Automated Merchant Creation...");
+        
+        // Read configuration from CSV
+        await readInputCSV(csvFilePath);
+        
+        if (config.merchants.length === 0) {
+            throw new Error("No valid merchants found in CSV file");
+        }
+        
+        console.log(`📱 Processing ${config.merchants.length} merchants`);
+        
+        // Process each merchant
+        for (let i = 0; i < config.merchants.length; i++) {
+            const merchant = config.merchants[i];
+            await processPhoneNumber(merchant, i + 1, config.merchants.length);
+            
+            // Add delay between merchants to avoid rate limiting
+            if (i < config.merchants.length - 1) {
+                console.log("\n⏳ Waiting before processing next merchant...");
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+        
+        // Save merchant data to CSV
+        await saveMerchantDataToCSV();
+        
+        // Final summary
+        console.log("\n" + "=".repeat(80));
+        console.log("🎉 MERCHANT CREATION COMPLETED SUCCESSFULLY! 🎉");
+        console.log("=".repeat(80));
+        console.log(`📊 Summary:`);
+        console.log(`   📱 Merchants processed: ${config.merchants.length}`);
+        console.log(`   🏪 Total merchants created: ${storeNameMerchantId.length}`);
+        console.log(`   💳 Total VPAs created: ${storeVpa.length}`);
+        console.log(`   📁 Data saved to: ${MERCHANTS_OUTPUT_PATH}`);
+        
+        return {
+            success: true,
+            processed: config.merchants.length,
+            merchantsCreated: storeNameMerchantId.length,
+            vpasCreated: storeVpa.length,
+            merchants: storeNameMerchantId,
+            vpas: storeVpa,
+            outputFile: MERCHANTS_OUTPUT_PATH
+        };
+        
+    } catch (error) {
+        console.error("❌ Merchant creation failed:", error.message);
+        return {
+            success: false,
+            error: error.message,
+            merchantsCreated: storeNameMerchantId.length,
+            vpasCreated: storeVpa.length
+        };
+    }
+}
+
+// Run the automation
+const csvFilePath = process.argv[2] || INPUT_CSV_PATH;
+AutomatedMerchantCreation(csvFilePath);

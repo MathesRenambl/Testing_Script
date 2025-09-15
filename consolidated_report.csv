@@ -1,0 +1,10 @@
+businessNumber,shopName,merchantId,vpa,charges,transactions
+9876543210,Business 1 - 9876543210,MC1757936293105,yahvipay.1757936293105@kvb,"device: ₹100 (monthly, Success)",None
+9876543210,Business 2 - 9876543210,MC1757936294973,yahvipay.1757936294973@kvb,"device: ₹100 (monthly, Success)",None
+8765432109,Business 1 - 8765432109,MC1757936298585,yahvipay.1757936298585@kvb,"loan: ₹150 (daily, Success)",₹1500 (Success)
+7654321098,Business 1 - 7654321098,MC1757936302076,yahvipay.1757936302076@kvb,"device: ₹150 (onetime, Success)",₹3000 (Success)
+7654321098,Business 2 - 7654321098,MC1757936303671,yahvipay.1757936303671@kvb,"device: ₹150 (onetime, Success)",₹3000 (Success)
+7654321098,Business 3 - 7654321098,MC1757936305029,yahvipay.1757936305029@kvb,"device: ₹150 (onetime, Success)",₹3000 (Success)
+6543210987,Business 1 - 6543210987,MC1757936308527,yahvipay.1757936308527@kvb,"loan: ₹100 (monthly, Success)",₹1200 (Success)
+5432109876,Business 1 - 5432109876,MC1757936311970,yahvipay.1757936311970@kvb,"device: ₹150 (daily, Success)",₹2500 (Success)
+5432109876,Business 2 - 5432109876,MC1757936313544,yahvipay.1757936313544@kvb,"device: ₹150 (daily, Success)",₹2500 (Success)

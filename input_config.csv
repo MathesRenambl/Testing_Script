@@ -1,0 +1,6 @@
+businessNumber,noOfShops,chargeAmount,chargeType,chargeFrequency,transactionAmount
+9876543210,2,100,device,monthly,2000
+8765432109,1,150,loan,daily,1500
+7654321098,3,150,device,onetime,3000
+6543210987,1,100,loan,monthly,1200
+5432109876,2,150,device,daily,2500

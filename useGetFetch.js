@@ -17,9 +17,14 @@ export const useGetFetch = async (endPoint, query = {}, includeApiKey = true) =>
 
         console.log("GET", url);
 
-        const response = await fetch(url);
+        const response = await fetch(url,{
+            headers: {
+            "Content-Type": "application/json",
+             "x-db-name": "Gokul_testing"
+        },
+        });
 
-        if (!response.ok) {
+        if (!response.ok) {1
             const errorText = await response.text();
             throw new Error(errorText || "Failed to fetch data");
         }
