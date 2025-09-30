@@ -7,15 +7,19 @@ dotenv.config();
 
 const storeNameMerchantId = [];
 const storeVpa = [];
+const merchantList = []; // New array to store only merchantId
 const apiKey2 = process.env.API_KEY2;
 var numberOfShopsCount;
 var phoneNumber = "";
-var createdMerchantId = "";
+
+
+// let createdMerchantId = "";
 var apiKey = "";
 
 // CSV file paths
 const INPUT_CSV_PATH = './input_config.csv';
 const MERCHANTS_OUTPUT_PATH = './created_merchants.csv';
+const MERCHANT_LIST_OUTPUT_PATH = './merchant_list.js'; // New output file for merchantId list
 
 // Configuration object to store CSV data
 let config = {
@@ -30,7 +34,7 @@ function printSection(title, data) {
 function printShopCreationMessage(shopNumber, phoneNum) {
     const message = `========== 📌 SHOP ${shopNumber} CREATED SUCCESSFULLY FOR ${phoneNum} ==========`;
     const borderLine = "=".repeat(message.length);
-    console.log(borderLine); 
+    console.log(borderLine);
     console.log(message);
     console.log(borderLine);
 }
@@ -38,7 +42,7 @@ function printShopCreationMessage(shopNumber, phoneNum) {
 function printPhoneProcessingMessage(phoneNum, index, total) {
     const message = `========== 📱 PROCESSING PHONE NUMBER ${index}/${total}: ${phoneNum} ==========`;
     const borderLine = "=".repeat(message.length);
-    console.log(borderLine); 
+    console.log(borderLine);
     console.log(message);
     console.log(borderLine);
 }
@@ -51,7 +55,7 @@ async function readInputCSV(filePath = INPUT_CSV_PATH) {
         }
 
         const csvData = fs.readFileSync(filePath, 'utf8');
-        
+
         const parseResult = Papa.parse(csvData, {
             header: true,
             skipEmptyLines: true,
@@ -63,23 +67,53 @@ async function readInputCSV(filePath = INPUT_CSV_PATH) {
             console.error('CSV parsing errors:', parseResult.errors);
         }
 
+        const chargeTypeOptions = ["device", "loan"];
+        const chargeFrequencyOptions = ["daily", "monthly", "onetime"];
+
         const merchants = [];
         parseResult.data.forEach((row, index) => {
-            // Clean and extract data from row
             const businessNumber = (row.businessNumber || row.phoneNumber || row.phone || '').toString().trim();
             const noOfShops = parseInt(row.noOfShops || row.numberOfShops || row.shops || 1);
-            
-            // Validate business number format (10 digits)
+
             if (businessNumber && /^\d{10}$/.test(businessNumber)) {
+                // Parse all possible charges
+                const charges = [];
+
+                const primaryChargeAmount = parseFloat(row.chargeAmount || 0);
+                const primaryChargeType = (row.chargeType || '').toLowerCase();
+                const primaryFrequency = (row.chargeFrequency || '').toLowerCase();
+
+                if (primaryChargeAmount > 0 && chargeTypeOptions.includes(primaryChargeType) && chargeFrequencyOptions.includes(primaryFrequency)) {
+                    charges.push({
+                        chargeAmount: primaryChargeAmount,
+                        chargeType: primaryChargeType,
+                        chargeFrequency: primaryFrequency
+                    });
+                }
+
+                const secondaryChargeAmount = parseFloat(row.chargeAmount2 || 0);
+                const secondaryChargeType = (row.chargeType2 || '').toLowerCase();
+                const secondaryFrequency = (row.chargeFrequency2 || '').toLowerCase();
+
+                if (secondaryChargeAmount > 0 && chargeTypeOptions.includes(secondaryChargeType) && chargeFrequencyOptions.includes(secondaryFrequency)) {
+                    charges.push({
+                        chargeAmount: secondaryChargeAmount,
+                        chargeType: secondaryChargeType,
+                        chargeFrequency: secondaryFrequency
+                    });
+                }
+
                 merchants.push({
                     index: index + 1,
                     businessNumber,
-                    noOfShops
+                    noOfShops,
+                    charges
                 });
             } else {
                 console.warn(`⚠️  Row ${index + 1}: Invalid business number '${businessNumber}' - skipping`);
             }
         });
+
 
         config = { merchants };
 
@@ -113,16 +147,33 @@ async function saveMerchantDataToCSV() {
         const csv = Papa.unparse(csvData);
         fs.writeFileSync(MERCHANTS_OUTPUT_PATH, csv, 'utf8');
         console.log(`✅ Merchant data saved to ${MERCHANTS_OUTPUT_PATH}`);
-        
+
         // Also log the data for verification
         console.log('\n📋 Created Merchants Data:');
         storeNameMerchantId.forEach((store, index) => {
             const vpa = storeVpa.find(v => v.includes(store.merchantId.slice(2))) || 'N/A';
             console.log(`${index + 1}. Business: ${store.phoneNumber} | Shop: ${store.storeName || 'Unnamed'} | Merchant ID: ${store.merchantId} | VPA: ${vpa}`);
         });
-        
+
     } catch (error) {
         console.error('❌ Error saving merchant data to CSV:', error.message);
+    }
+}
+
+// Function to save merchantId list to JS file
+async function saveMerchantListToJS() {
+    try {
+        const jsContent = `export const merchantList = ${JSON.stringify(merchantList, null, 2)};`;
+        fs.writeFileSync(MERCHANT_LIST_OUTPUT_PATH, jsContent, 'utf8');
+        console.log(`✅ Merchant ID list saved to ${MERCHANT_LIST_OUTPUT_PATH}`);
+
+        console.log('\n📋 Merchant ID List Data:');
+        merchantList.forEach((merchantId, index) => {
+            console.log(`${index + 1}. Merchant ID: ${merchantId}`);
+        });
+
+    } catch (error) {
+        console.error('❌ Error saving merchant ID list to JS:', error.message);
     }
 }
 
@@ -132,11 +183,11 @@ function validatePhoneNumber(phone) {
     return phonePattern.test(phone.toString());
 }
 
-const updateBusinessDetailsFunction = async (shopNumber, apiCount, phoneNum) => {
+const updateBusinessDetailsFunction = async (shopNumber, apiCount, phoneNum, createdMerchantId) => {
     const businessDetailsPayload = {
         businessPhone: phoneNum,
         merchantId: createdMerchantId,
-        name: `Business ${shopNumber} - ${phoneNum}`,
+        name: `Business ${shopNumber}`,
         category: "Retail & Shopping",
         subCategory: "Grocery Stores",
         pincode: "600028",
@@ -152,12 +203,12 @@ const updateBusinessDetailsFunction = async (shopNumber, apiCount, phoneNum) => 
     printSection(`Update Business Details Response ${apiCount}`, businessUpdate);
 }
 
-const updateUserDetailsFunction = async (phone, shopNumber, apiCount) => {
+const updateUserDetailsFunction = async (phone, apiCount, createdMerchantId) => {
     const userDetailsPayload = {
         phoneNumber: phoneNumber,
         merchantId: createdMerchantId,
-        name: "User",
-        phone: `${phone}${shopNumber}`,
+        name: `User ${apiCount}`,
+        phone: phone,
         dob: "2000-01-01",
         address: "123 Test Street, Chennai"
     };
@@ -166,7 +217,7 @@ const updateUserDetailsFunction = async (phone, shopNumber, apiCount) => {
     printSection(`Update User Details Response ${apiCount}`, userUpdate);
 }
 
-const updateAddressDetailsFunction = async (apiCount) => {
+const updateAddressDetailsFunction = async (apiCount, createdMerchantId) => {
     const addressPayload = {
         address: "123 Street, Chennai",
         latitude: "12.9716",
@@ -179,8 +230,7 @@ const updateAddressDetailsFunction = async (apiCount) => {
     const addressUpdate = await updateAddressDetails(addressPayload);
     printSection(`Update Address Details Response ${apiCount}`, addressUpdate);
 }
-
-const verifyFlagsFunction = async () => {
+const verifyFlagsFunction = async (createdMerchantId) => {
     const flagsPayload = {
         businessPhone: phoneNumber,
         merchantId: createdMerchantId
@@ -200,7 +250,7 @@ const allowMultiFlagFunction = async () => {
     printSection("Allow Multiple Account Response", multiAccount);
 }
 
-export async function BusinessVPA(merchantId, apiCount) {
+export async function BusinessVPA(merchantId, apiCount, createdMerchantId) {
     const payLoad = {
         businessPhone: phoneNumber,
         bankName: "KVB",
@@ -222,11 +272,11 @@ async function processPhoneNumber(merchantConfig, merchantIndex, totalMerchants)
     try {
         phoneNumber = merchantConfig.businessNumber;
         printPhoneProcessingMessage(phoneNumber, merchantIndex, totalMerchants);
-        
+
         // Create multiple shops for this phone number
         for (let shopIndex = 1; shopIndex <= merchantConfig.noOfShops; shopIndex++) {
             console.log(`\n🏪 Creating Shop ${shopIndex}/${merchantConfig.noOfShops} for ${phoneNumber}...`);
-            
+
             printSection(`Login Payload ${shopIndex}`, phoneNumber);
             const generate = await login(phoneNumber);
             printSection(`Login Response ${shopIndex}`, generate);
@@ -246,50 +296,53 @@ async function processPhoneNumber(merchantConfig, merchantIndex, totalMerchants)
                         businessName: "",
                         permission: businessData.Success.allowMultiFlag
                     };
-                    
+
                     printSection(`LoginAccountOTP Payload ${shopIndex}`, payLoad);
                     const loginAccountOTPRes = await loginAccountOTP(payLoad);
                     printSection(`LoginAccountOTP Response ${shopIndex}`, loginAccountOTPRes);
-
-                    createdMerchantId = isNewBusiness ? loginAccountOTPRes.merchantId : loginAccountOTPRes.newMerchantId;
-                    storeNameMerchantId.push({
+                    let createdMerchantId = "";
+                    createdMerchantId = isNewBusiness ? loginAccountOTPRes?.merchantId : loginAccountOTPRes?.newMerchantId;
+                    const vpa = createdMerchantId ? createdMerchantId?.slice(2) : "123456789";
+                    const merchantData = {
                         merchantId: createdMerchantId,
                         storeName: "",
                         phoneNumber: phoneNumber,
                         shopNumber: shopIndex
-                    });
+                    };
+                    storeNameMerchantId.push(merchantData);
+                    merchantList.push(createdMerchantId); // Add only merchantId to merchant list array
                     apiKey = loginAccountOTPRes.apiKey;
-                    
+
                     // Update business details if needed
                     if (loginAccountOTPRes.verifyFlags.business === "no") {
-                        await updateBusinessDetailsFunction(shopIndex, shopIndex, phoneNumber);
+                        await updateBusinessDetailsFunction(shopIndex, shopIndex, phoneNumber, createdMerchantId);
                     }
-                    
+
                     // Update user details if needed
                     if (loginAccountOTPRes.verifyFlags.user === "no") {
-                        await updateUserDetailsFunction(phoneNumber.slice(0, 9), shopIndex, shopIndex);
+                        await updateUserDetailsFunction(phoneNumber, shopIndex, createdMerchantId);
                     }
-                    
+
                     // Update address details if needed
                     if (loginAccountOTPRes.verifyFlags.location === "no") {
-                        await updateAddressDetailsFunction(shopIndex);
+                        await updateAddressDetailsFunction(shopIndex, createdMerchantId);
                     }
-                    
+
                     // Verify flags if needed
                     if (loginAccountOTPRes.verifyFlags.pan === "no" || loginAccountOTPRes.verifyFlags.bank === "no") {
-                        await verifyFlagsFunction();
+                        await verifyFlagsFunction(createdMerchantId);
                     }
-                    
+
                     // Allow multiple accounts for first shop only
                     if (shopIndex === 1 && merchantConfig.noOfShops > 1) {
                         await allowMultiFlagFunction();
                     }
-                    
+
                     // Set up Business VPA
-                    await BusinessVPA(createdMerchantId.slice(2), shopIndex);
-                    
+                    await BusinessVPA(vpa, shopIndex, createdMerchantId);
+
                     printShopCreationMessage(shopIndex, phoneNumber);
-                    
+
                 } else {
                     console.log(`⚠️  Cannot create shop ${shopIndex} - AllowMultiFlag is 'no' for ${phoneNumber}`);
                     break; // Stop creating more shops for this number
@@ -297,15 +350,15 @@ async function processPhoneNumber(merchantConfig, merchantIndex, totalMerchants)
             } else {
                 console.log(`❌ Login failed for ${phoneNumber}, shop ${shopIndex}`);
             }
-            
+
             // Add small delay between shop creations
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
-        
+
         console.log(`\n✅ Completed processing ${phoneNumber}`);
         console.log(`📊 Total stores created so far: ${storeNameMerchantId.length}`);
         console.log(`📊 Total VPAs created so far: ${storeVpa.length}`);
-        
+
     } catch (error) {
         console.error(`❌ Error processing phone number ${phoneNumber}:`, error.message);
     }
@@ -315,31 +368,32 @@ async function processPhoneNumber(merchantConfig, merchantIndex, totalMerchants)
 export async function AutomatedMerchantCreation(csvFilePath = INPUT_CSV_PATH) {
     try {
         console.log("\n🚀 Starting Automated Merchant Creation...");
-        
+
         // Read configuration from CSV
         await readInputCSV(csvFilePath);
-        
+
         if (config.merchants.length === 0) {
             throw new Error("No valid merchants found in CSV file");
         }
-        
+
         console.log(`📱 Processing ${config.merchants.length} merchants`);
-        
+
         // Process each merchant
         for (let i = 0; i < config.merchants.length; i++) {
             const merchant = config.merchants[i];
             await processPhoneNumber(merchant, i + 1, config.merchants.length);
-            
+
             // Add delay between merchants to avoid rate limiting
             if (i < config.merchants.length - 1) {
                 console.log("\n⏳ Waiting before processing next merchant...");
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
-        
-        // Save merchant data to CSV
+
+        // Save merchant data to both files
         await saveMerchantDataToCSV();
-        
+        await saveMerchantListToJS();
+
         // Final summary
         console.log("\n" + "=".repeat(80));
         console.log("🎉 MERCHANT CREATION COMPLETED SUCCESSFULLY! 🎉");
@@ -349,17 +403,19 @@ export async function AutomatedMerchantCreation(csvFilePath = INPUT_CSV_PATH) {
         console.log(`   🏪 Total merchants created: ${storeNameMerchantId.length}`);
         console.log(`   💳 Total VPAs created: ${storeVpa.length}`);
         console.log(`   📁 Data saved to: ${MERCHANTS_OUTPUT_PATH}`);
-        
+        console.log(`   📁 Merchant ID list saved to: ${MERCHANT_LIST_OUTPUT_PATH}`);
+
         return {
             success: true,
             processed: config.merchants.length,
             merchantsCreated: storeNameMerchantId.length,
             vpasCreated: storeVpa.length,
             merchants: storeNameMerchantId,
-            vpas: storeVpa,
-            outputFile: MERCHANTS_OUTPUT_PATH
+            merchantList: merchantList,
+            outputFile: MERCHANTS_OUTPUT_PATH,
+            merchantListOutputFile: MERCHANT_LIST_OUTPUT_PATH
         };
-        
+
     } catch (error) {
         console.error("❌ Merchant creation failed:", error.message);
         return {

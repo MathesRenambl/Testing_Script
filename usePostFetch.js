@@ -17,7 +17,7 @@ export  const usePostFetch = async (endPoint, data) => {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-             "x-db-name": "Gokul_testing"
+            //  "x-db-name": "Gokul_testing"
         },
         body: JSON.stringify({
             ...data,

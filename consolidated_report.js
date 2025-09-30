@@ -5,7 +5,7 @@ import path from 'path';
 // CSV file paths
 const MERCHANTS_CSV_PATH = './created_merchants.csv';
 const CHARGES_CSV_PATH = './applied_charges.csv';
-const TRANSACTIONS_CSV_PATH = './transaction_payloads.csv';
+const TRANSACTIONS_CSV_PATH = './older_TransactionMethod_Response.csv';
 const CONSOLIDATED_OUTPUT_PATH = process.argv[2] || './consolidated_report.csv';
 
 // Ensure output directory exists
@@ -93,9 +93,12 @@ async function generateConsolidatedReport() {
             }
         });
 
+        // Calculate total sum of all successful transactions across all merchants
+        let totalAllSuccessfulTransactions = 0;
+
         // Prepare data for CSV
         const csvData = [
-            ['businessNumber', 'shopName', 'merchantId', 'vpa', 'charges', 'transactions'],
+            ['businessNumber', 'shopName', 'merchantId', 'vpa', 'charges', 'successfulTransactions', 'totalTransactionAmount'],
             ...Object.values(merchantMap).map(merchant => {
                 // Format charges as a string
                 const chargesString = merchant.charges.length > 0
@@ -104,9 +107,16 @@ async function generateConsolidatedReport() {
                       ).join('; ')
                     : 'None';
 
-                // Calculate total sum of successful transactions
+                // Calculate total sum of successful transactions for this merchant
                 const totalSuccessfulTransactions = merchant.transactions
                     .filter(t => t.status === 'Success')
+                    .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+                // Add to total successful transactions across all merchants
+                totalAllSuccessfulTransactions += totalSuccessfulTransactions;
+
+                // Calculate total sum of all transactions (successful or not)
+                const totalTransactionAmount = merchant.transactions
                     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
                 // Format transactions as total sum of successful transactions
@@ -120,9 +130,12 @@ async function generateConsolidatedReport() {
                     merchant.merchantId,
                     merchant.vpa,
                     chargesString,
-                    transactionsString
+                    transactionsString,
+                    totalTransactionAmount > 0 ? `₹${totalTransactionAmount}` : 'None'
                 ];
-            })
+            }),
+            // Add total row for all successful transactions
+            ['', '', '', '', '', 'Total Successful Transactions', `₹${totalAllSuccessfulTransactions}`]
         ];
 
         // Write to CSV
@@ -140,21 +153,29 @@ async function generateConsolidatedReport() {
             const totalSuccessfulTransactions = merchant.transactions
                 .filter(t => t.status === 'Success')
                 .reduce((sum, t) => sum + (t.amount || 0), 0);
+            const totalTransactionAmount = merchant.transactions
+                .reduce((sum, t) => sum + (t.amount || 0), 0);
             console.log(`${index + 1}. Business: ${merchant.businessNumber} | Shop: ${merchant.shopName} | Merchant ID: ${merchant.merchantId} | VPA: ${merchant.vpa}`);
             console.log(`   Charges: ${merchant.charges.length > 0 ? merchant.charges.length + ' applied' : 'None'}`);
-            console.log(`   Transactions: ${totalSuccessfulTransactions > 0 ? `₹${totalSuccessfulTransactions} (Success)` : 'None'}`);
+            console.log(`   Successful Transactions: ${totalSuccessfulTransactions > 0 ? `₹${totalSuccessfulTransactions} (Success)` : 'None'}`);
+            console.log(`   Total Transaction Amount: ${totalTransactionAmount > 0 ? `₹${totalTransactionAmount}` : 'None'}`);
         });
+
+        // Log total successful transactions
+        console.log(`\n💰 Total Successful Transactions Across All Merchants: ₹${totalAllSuccessfulTransactions}`);
 
         console.log("\n" + "=".repeat(80));
         console.log("🎉 CONSOLIDATED REPORT GENERATION COMPLETED SUCCESSFULLY! 🎉");
         console.log("=".repeat(80));
         console.log(`📊 Summary:`);
         console.log(`   🏪 Total merchants: ${Object.keys(merchantMap).length}`);
+        console.log(`   💸 Total Successful Transactions: ₹${totalAllSuccessfulTransactions}`);
         console.log(`   📁 Data saved to: ${CONSOLIDATED_OUTPUT_PATH}`);
 
         return {
             success: true,
             merchantsProcessed: Object.keys(merchantMap).length,
+            totalSuccessfulTransactions: totalAllSuccessfulTransactions,
             outputFile: CONSOLIDATED_OUTPUT_PATH
         };
 

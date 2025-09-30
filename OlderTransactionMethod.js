@@ -7,7 +7,7 @@ dotenv.config();
 
 // CSV file paths
 const INPUT_CSV_PATH = './input_config.csv';
-const TRANSACTIONS_OUTPUT_PATH = './transaction_payloads.csv';
+const TRANSACTIONS_OUTPUT_PATH = './older_TransactionMethod_Response.csv';
 
 // Configuration
 var storeNameMerchantId = [];
@@ -66,14 +66,26 @@ function generateUpiTransID() {
 }
 
 // Function to split amount into random parts summing to total
-function splitAmount(totalAmount) {
-    const splits = [];
-    let remaining = totalAmount;
+function splitAmount(totalAmount, parts=8640) {
+    // const splits = [];
+    // let remaining = totalAmount;
 
-    while (remaining > 0) {
-        const next = Math.min(randomInt(100, 1000), remaining);
-        splits.push(next);
-        remaining -= next;
+    // while (remaining > 0) {
+    //     const next = Math.min(randomInt(100, 1000), remaining);
+    //     splits.push(next);
+    //     remaining -= next;
+    // }
+
+    // return splits;
+
+    const baseAmount = Math.floor(totalAmount / parts);
+    const remainder = totalAmount % parts;
+
+    const splits = Array(parts).fill(baseAmount);
+
+    // Distribute the remainder (1 rupee extra) to the first 'remainder' slots
+    for (let i = 0; i < remainder; i++) {
+        splits[i] += 1;
     }
 
     return splits;
@@ -87,7 +99,7 @@ async function readInputCSV(filePath = INPUT_CSV_PATH) {
         }
 
         const csvData = fs.readFileSync(filePath, 'utf8');
-        
+
         const parseResult = Papa.parse(csvData, {
             header: true,
             skipEmptyLines: true,
@@ -104,13 +116,13 @@ async function readInputCSV(filePath = INPUT_CSV_PATH) {
             // Clean and extract data from row
             const businessNumber = (row.businessNumber || row.phoneNumber || row.phone || '').toString().trim();
             const transactionAmount = parseFloat(row.transactionAmount || row.transAmount || 0);
-            
+
             // Validate business number format (10 digits)
             if (businessNumber && /^\d{10}$/.test(businessNumber)) {
                 merchants.push({
                     index: index + 1,
                     businessNumber,
-                    transactionAmount: transactionAmount > 0 ? transactionAmount : 1000 // Default transaction amount
+                    transactionAmount: transactionAmount >= 0 ? transactionAmount : 0 // Default transaction amount
                 });
             } else {
                 console.warn(`⚠️  Row ${index + 1}: Invalid business number '${businessNumber}' - skipping`);
@@ -154,43 +166,108 @@ async function saveTransactionPayloadsToCSV() {
 
         fs.writeFileSync(TRANSACTIONS_OUTPUT_PATH, csvData, 'utf8');
         console.log(`✅ Transaction payloads saved to ${TRANSACTIONS_OUTPUT_PATH}`);
-        
+
         // Also log the data for verification
         console.log('\n📋 Generated Transaction Payloads:');
         const newPayloads = transactionPayloads.slice(-transactionPayloads.length);
         newPayloads.forEach((transaction, index) => {
             console.log(`${index + 1}. Business: ${transaction.businessNumber} | VPA: ${transaction.vpa} | Amount: ₹${transaction.amount} | Status: ${transaction.status}`);
         });
-        
+
     } catch (error) {
         console.error('❌ Error saving transaction payloads to CSV:', error.message);
     }
 }
 
-// Main function to generate and send transactions
-async function generateAndSendTransactions(vpa, amount, businessNumber, merchantId, shopName) {
-    const now = new Date();
-    const startDate = new Date(now.getTime() - 2 * 60 * 60 * 1000); // 2 hours ago
-    const endDate = now;
 
-    const amounts = splitAmount(amount);
+// function getThirtyMinuteSlots() {
+//     const slots = [];
+//     const now = new Date();
+//     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+//     const slotDurationMs = 30 * 60 * 1000;
+
+//     for (let i = 0; i < (24 * 60) / 30; i++) {
+//         const slotStart = new Date(todayMidnight.getTime() + i * slotDurationMs);
+//         const slotEnd = new Date(slotStart.getTime() + slotDurationMs - 1);
+//         slots.push({ start: slotStart, end: slotEnd });
+//     }
+//     return slots;
+// }
+
+// function getTenMinuteSlots() {
+//     const slots = [];
+//     const now = new Date();
+//     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+//     const slotDurationMs = 10 * 60 * 1000; // 10 minutes in ms
+
+//     const totalSlots = (24 * 60) / 10; // 144 slots in a day
+
+//     for (let i = 0; i < totalSlots; i++) {
+//         const slotStart = new Date(todayMidnight.getTime() + i * slotDurationMs);
+//         const slotEnd = new Date(slotStart.getTime() + slotDurationMs - 1);
+//         slots.push({ start: slotStart, end: slotEnd });
+//     }
+
+//     return slots;
+// }
+
+// function getOneMinuteSlots() {
+//     const slots = [];
+//     const now = new Date();
+//     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+//     const slotDurationMs = 60 * 1000; // 1 minute
+
+//     for (let i = 0; i < 1440; i++) {
+//         const slotStart = new Date(todayMidnight.getTime() + i * slotDurationMs);
+//         const slotEnd = new Date(slotStart.getTime() + slotDurationMs - 1);
+//         slots.push({ start: slotStart, end: slotEnd });
+//     }
+
+//     return slots;
+// }
+
+function getTenSecondSlots() {
+    const slots = [];
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const slotDurationMs = 10 * 1000; // 10 seconds
+
+    for (let i = 0; i < (86400 / 10); i++) {
+        const slotStart = new Date(todayMidnight.getTime() + i * slotDurationMs);
+        const slotEnd = new Date(slotStart.getTime() + slotDurationMs - 1);
+        slots.push({ start: slotStart, end: slotEnd });
+    }
+
+    return slots;
+}
+
+
+
+async function generateAndSendTransactions(vpa, amount, businessNumber, merchantId, shopName) {
+    const slots = getTenSecondSlots(); // All 48 time ranges for today
+    const amounts = splitAmount(amount); // Split total amount
     const payloads = [];
 
-    for (let amt of amounts) {
+    for (let i = 0; i < amounts.length; i++) {
+        const amt = amounts[i];
+
+        // Get slot based on index, or wrap around
+        const slot = slots[i % slots.length];
+
         const payload = {
             KVBData: {
                 ...fixedData,
                 Amount: amt.toString(),
                 PayeeAddr: vpa,
                 MerchantRefID: generateMerchantRefId("REF"),
-                TransDate: randomDate(startDate, endDate),
+                TransDate: randomDate(slot.start, slot.end),
                 RRN: generateRRN(),
                 UpiTransID: generateUpiTransID(),
             },
         };
         payloads.push(payload);
 
-        // Store payload data for CSV
+        // Store payload data for CSV/log
         transactionPayloads.push({
             businessNumber,
             vpa,
@@ -203,14 +280,14 @@ async function generateAndSendTransactions(vpa, amount, businessNumber, merchant
             upiTransID: payload.KVBData.UpiTransID,
             createdAt: new Date().toISOString(),
             status: 'Pending',
-            payload: JSON.stringify(payload)
+            payload: JSON.stringify(payload),
         });
     }
 
     console.log(`✅ Generated ${payloads.length} transaction payloads for ${vpa}`);
     printSection(`Generated Payloads for ${vpa}`, payloads);
 
-    // Send them one by one
+    // Send payloads one by one
     let successCount = 0;
     let failCount = 0;
 
@@ -218,16 +295,12 @@ async function generateAndSendTransactions(vpa, amount, businessNumber, merchant
         try {
             const response = await fetch(endpoint, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payloads[i]),
             });
-            
-            console.log(`✅ Sent payload ${i + 1}/${payloads.length} for ${vpa}: Status ${response.status}`);
-            
-            // Update status in stored payloads
+
             const payloadIndex = transactionPayloads.length - payloads.length + i;
+
             if (response.ok) {
                 transactionPayloads[payloadIndex].status = 'Success';
                 successCount++;
@@ -235,19 +308,160 @@ async function generateAndSendTransactions(vpa, amount, businessNumber, merchant
                 transactionPayloads[payloadIndex].status = 'Failed';
                 failCount++;
             }
-            
+
+            console.log(`✅ Sent payload ${i + 1}/${payloads.length} for ${vpa}: Status ${response.status}`);
         } catch (error) {
-            console.error(`❌ Error sending payload ${i + 1} for ${vpa}:`, error.message);
-            
-            // Update status in stored payloads
             const payloadIndex = transactionPayloads.length - payloads.length + i;
             transactionPayloads[payloadIndex].status = 'Error';
             failCount++;
+            console.error(`❌ Error sending payload ${i + 1} for ${vpa}:`, error.message);
         }
     }
 
     return { successCount, failCount, totalPayloads: payloads.length };
 }
+
+
+// Main function to generate and send transactions
+// async function generateAndSendTransactions(vpa, amount, businessNumber, merchantId, shopName) {
+//     // const now = new Date();
+//     // const startDate = new Date(now.getTime() - 2 * 60 * 60 * 1000); // 2 hours ago
+//     // const endDate = now;
+
+//     // const now = new Date();
+//     // const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+//     // // Start of tomorrow: 00:00:00.000
+//     // const startDate = new Date(todayMidnight.getTime() + 24 * 60 * 60 * 1000);
+//     // // End of tomorrow: 23:59:59.999
+//     // const endDate = new Date(todayMidnight.getTime() + 2 * 24 * 60 * 60 * 1000 - 1);
+
+//     const now = new Date();
+//     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+//     // Start of yesterday (00:00:00.000)
+//     const startDate = new Date(todayMidnight.getTime() - 24 * 60 * 60 * 1000);
+//     // End of yesterday (23:59:59.999)
+//     const endDate = new Date(todayMidnight.getTime() - 1);
+
+
+
+
+
+//     // const now = new Date();
+//     // const todayMidnight = new Date(Date.UTC(
+//     //     now.getFullYear(),
+//     //     now.getMonth(),
+//     //     now.getDate()
+//     // ));
+
+//     // // Start time: 5:00 PM IST → 11:30 AM UTC
+//     // const startDate = new Date(todayMidnight.getTime() + (12 * 60 + 30) * 60 * 1000);
+
+//     // // End time: 7:00 PM IST → 1:30 PM UTC
+//     // const endDate = new Date(todayMidnight.getTime() + (13 * 60 + 30) * 60 * 1000);
+
+
+//     // const now = new Date();
+//     // const todayMidnightUTC = new Date(Date.UTC(
+//     //     now.getFullYear(),
+//     //     now.getMonth(),
+//     //     now.getDate()
+//     // ));
+
+//     // // Start time: 6:30 PM IST → 13:00 UTC
+//     // const startDate = new Date(todayMidnightUTC.getTime() + (13 * 60) * 60 * 1000);
+//     // // End time: 11:59 PM IST → 18:29 UTC
+//     // const endDate = new Date(todayMidnightUTC.getTime() + (18 * 60 + 29) * 60 * 1000);
+
+
+//     // const now = new Date();
+//     // const todayMidnightUTC = new Date(Date.UTC(
+//     //     now.getFullYear(),
+//     //     now.getMonth(),
+//     //     now.getDate()
+//     // ));
+
+//     // // Start time: 6:29 PM IST → 12:59 PM UTC
+//     // const startDate = new Date(todayMidnightUTC.getTime() + (12 * 60 + 59) * 60 * 1000);
+
+//     // // End time: 6:30 PM IST → 13:00 PM UTC
+//     // const endDate = new Date(todayMidnightUTC.getTime() + (13 * 60) * 60 * 1000);
+//     const amounts = splitAmount(amount);
+//     const payloads = [];
+
+//     for (let amt of amounts) {
+//         const payload = {
+//             KVBData: {
+//                 ...fixedData,
+//                 Amount: amt.toString(),
+//                 PayeeAddr: vpa,
+//                 MerchantRefID: generateMerchantRefId("REF"),
+//                 TransDate: randomDate(startDate, endDate),
+//                 RRN: generateRRN(),
+//                 UpiTransID: generateUpiTransID(),
+//             },
+//         };
+//         payloads.push(payload);
+
+//         // Store payload data for CSV
+//         transactionPayloads.push({
+//             businessNumber,
+//             vpa,
+//             merchantId,
+//             shopName: shopName || 'N/A',
+//             amount: amt,
+//             merchantRefID: payload.KVBData.MerchantRefID,
+//             transDate: payload.KVBData.TransDate,
+//             rrn: payload.KVBData.RRN,
+//             upiTransID: payload.KVBData.UpiTransID,
+//             createdAt: new Date().toISOString(),
+//             status: 'Pending',
+//             payload: JSON.stringify(payload)
+//         });
+//     }
+
+//     console.log(`✅ Generated ${payloads.length} transaction payloads for ${vpa}`);
+//     printSection(`Generated Payloads for ${vpa}`, payloads);
+
+//     // Send them one by one
+//     let successCount = 0;
+//     let failCount = 0;
+
+//     for (let i = 0; i < payloads.length; i++) {
+//         try {
+//             const response = await fetch(endpoint, {
+//                 method: "POST",
+//                 headers: {
+//                     "Content-Type": "application/json",
+//                 },
+//                 body: JSON.stringify(payloads[i]),
+
+//                 // signal:AbortSignal.timeout(200),
+//             });
+
+//             console.log(`✅ Sent payload ${i + 1}/${payloads.length} for ${vpa}: Status ${response.status}`);
+
+//             // Update status in stored payloads
+//             const payloadIndex = transactionPayloads.length - payloads.length + i;
+//             if (response.ok) {
+//                 transactionPayloads[payloadIndex].status = 'Success';
+//                 successCount++;
+//             } else {
+//                 transactionPayloads[payloadIndex].status = 'Failed';
+//                 failCount++;
+//             }
+
+//         } catch (error) {
+//             console.error(`❌ Error sending payload ${i + 1} for ${vpa}:`, error.message);
+
+//             // Update status in stored payloads
+//             const payloadIndex = transactionPayloads.length - payloads.length + i;
+//             transactionPayloads[payloadIndex].status = 'Error';
+//             failCount++;
+//         }
+//     }
+
+//     return { successCount, failCount, totalPayloads: payloads.length };
+// }
 
 // Function to create transactions for all merchants of a phone number
 async function createTransactionsForMerchant(merchantConfig, merchantIndex, totalMerchants) {
@@ -259,7 +473,7 @@ async function createTransactionsForMerchant(merchantConfig, merchantIndex, tota
             businessPhone: phoneNumber,
             apiKey: apiKey2
         };
-        
+
         printSection("Get All User Accounts Payload", payload);
         const phoneByMerchant = await getAllUserAccounts(payload);
         printSection("Get All User Accounts Response", phoneByMerchant);
@@ -270,14 +484,14 @@ async function createTransactionsForMerchant(merchantConfig, merchantIndex, tota
                 merchantId: item.merchantId,
                 businessVPA: item.businessVPA
             }));
-            
+
             storeNameMerchantId = merchants;
             console.log(`📊 Found ${merchants.length} merchants for ${phoneNumber}`);
 
-            if (merchantConfig.transactionAmount <= 100) {
-                console.log("❌ The transaction amount must be greater than 100.");
-                return;
-            }
+            // if (merchantConfig.transactionAmount <= 0) {
+            //     console.log("❌ The transaction amount must be greater than 100.");
+            //     return;
+            // }
 
             let totalSuccess = 0;
             let totalFailed = 0;
@@ -286,19 +500,19 @@ async function createTransactionsForMerchant(merchantConfig, merchantIndex, tota
             // Generate transactions for each merchant
             for (const store of merchants) {
                 console.log(`\n💳 Generating transactions for VPA: ${store.businessVPA}`);
-                
+
                 const result = await generateAndSendTransactions(
-                    store.businessVPA, 
-                    merchantConfig.transactionAmount, 
+                    store.businessVPA,
+                    merchantConfig.transactionAmount,
                     phoneNumber,
                     store.merchantId,
                     store.businessName
                 );
-                
+
                 totalSuccess += result.successCount;
                 totalFailed += result.failCount;
                 totalPayloads += result.totalPayloads;
-                
+
                 console.log(`✅ Completed transactions for ${store.businessVPA}: ${result.successCount}/${result.totalPayloads} successful`);
             }
 
@@ -319,35 +533,35 @@ async function createTransactionsForMerchant(merchantConfig, merchantIndex, tota
 export async function createTransactions(csvFilePath = INPUT_CSV_PATH) {
     try {
         console.log("\n🚀 Starting Automated Transaction Generation...");
-        
+
         // Read configuration from CSV
         await readInputCSV(csvFilePath);
-        
+
         if (config.merchants.length === 0) {
             throw new Error("No valid merchants found in CSV file for transactions");
         }
-        
+
         console.log(`📱 Processing transactions for ${config.merchants.length} merchants`);
-        
+
         // Process each merchant for transactions
         for (let i = 0; i < config.merchants.length; i++) {
             const merchant = config.merchants[i];
             await createTransactionsForMerchant(merchant, i + 1, config.merchants.length);
-            
+
             // Add delay between merchants to avoid rate limiting
             if (i < config.merchants.length - 1) {
                 console.log("\n⏳ Waiting before processing next merchant...");
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
-        
+
         // Save transaction payloads to CSV
         await saveTransactionPayloadsToCSV();
-        
+
         // Final summary
         const successfulTransactions = transactionPayloads.filter(t => t.status === 'Success').length;
         const failedTransactions = transactionPayloads.filter(t => t.status !== 'Success').length;
-        
+
         console.log("\n" + "=".repeat(80));
         console.log("🎉 TRANSACTION GENERATION COMPLETED SUCCESSFULLY! 🎉");
         console.log("=".repeat(80));
@@ -357,7 +571,7 @@ export async function createTransactions(csvFilePath = INPUT_CSV_PATH) {
         console.log(`   ✅ Successful transactions: ${successfulTransactions}`);
         console.log(`   ❌ Failed transactions: ${failedTransactions}`);
         console.log(`   📁 Data saved to: ${TRANSACTIONS_OUTPUT_PATH}`);
-        
+
         return {
             success: true,
             processed: config.merchants.length,
@@ -366,7 +580,7 @@ export async function createTransactions(csvFilePath = INPUT_CSV_PATH) {
             failedTransactions,
             outputFile: TRANSACTIONS_OUTPUT_PATH
         };
-        
+
     } catch (error) {
         console.error("❌ Transaction generation failed:", error.message);
         return {

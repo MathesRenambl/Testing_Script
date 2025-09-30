@@ -20,7 +20,7 @@ export const useGetFetch = async (endPoint, query = {}, includeApiKey = true) =>
         const response = await fetch(url,{
             headers: {
             "Content-Type": "application/json",
-             "x-db-name": "Gokul_testing"
+            //  "x-db-name": "Gokul_testing"
         },
         });
 

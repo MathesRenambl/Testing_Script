@@ -1,2 +1,6 @@
 .env
 node_modules
+consolidated_report.csv
+applied_charges.csv
+created_merchants.csv
+

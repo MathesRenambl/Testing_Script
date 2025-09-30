@@ -1,10 +1,3 @@
 businessNumber,merchantId,shopName,chargeName,frequency,amount,appliedAt,status,response
-9876543210,MC1757936293105,Business 1 - 9876543210,device,monthly,100,2025-09-15T11:40:55.541Z,Success,"{""Success"":""Charge added""}"
-9876543210,MC1757936294973,Business 2 - 9876543210,device,monthly,100,2025-09-15T11:40:55.640Z,Success,"{""Success"":""Charge added""}"
-8765432109,MC1757936298585,Business 1 - 8765432109,loan,daily,150,2025-09-15T11:40:57.286Z,Success,"{""Success"":""Charge added""}"
-7654321098,MC1757936302076,Business 1 - 7654321098,device,onetime,150,2025-09-15T11:40:58.905Z,Success,"{""Success"":""Charge added""}"
-7654321098,MC1757936303671,Business 2 - 7654321098,device,onetime,150,2025-09-15T11:40:58.939Z,Success,"{""Success"":""Charge added""}"
-7654321098,MC1757936305029,Business 3 - 7654321098,device,onetime,150,2025-09-15T11:40:59.062Z,Success,"{""Success"":""Charge added""}"
-6543210987,MC1757936308527,Business 1 - 6543210987,loan,monthly,100,2025-09-15T11:41:00.648Z,Success,"{""Success"":""Charge added""}"
-5432109876,MC1757936311970,Business 1 - 5432109876,device,daily,150,2025-09-15T11:41:02.320Z,Success,"{""Success"":""Charge added""}"
-5432109876,MC1757936313544,Business 2 - 5432109876,device,daily,150,2025-09-15T11:41:02.378Z,Success,"{""Success"":""Charge added""}"
+2335233523,MC1758974976280,Business 1,loan,daily,319,2025-09-27T12:09:43.509Z,Success,"{""Success"":""Charge added""}"
+2335233523,MC1758974976280,Business 1,device,onetime,100,2025-09-27T12:09:43.575Z,Success,"{""Success"":""Charge added""}"
