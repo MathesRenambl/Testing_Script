@@ -194,7 +194,7 @@ const updateBusinessDetailsFunction = async (shopNumber, apiCount, phoneNum, cre
         address: "123 Test Street, Chennai",
         businessType: "FIXED",
         mccCode: "5411"
-    };
+    };                                                     
     printSection(`Update Business Details Payload ${apiCount}`, businessDetailsPayload);
     const businessUpdate = await updateBusinessDetails(businessDetailsPayload);
     const id = storeNameMerchantId[storeNameMerchantId.length - 1];

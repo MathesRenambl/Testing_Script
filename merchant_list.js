@@ -1,3 +1,1 @@
-export const merchantList = [
-  "MC1759126224625"
-];
+export const merchantList = [];

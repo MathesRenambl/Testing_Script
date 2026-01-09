@@ -180,19 +180,19 @@ async function saveTransactionPayloadsToCSV() {
 }
 
 
-// function getThirtyMinuteSlots() {
-//     const slots = [];
-//     const now = new Date();
-//     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-//     const slotDurationMs = 30 * 60 * 1000;
+function getThirtyMinuteSlots() {
+    const slots = [];
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const slotDurationMs = 30 * 60 * 1000;
 
-//     for (let i = 0; i < (24 * 60) / 30; i++) {
-//         const slotStart = new Date(todayMidnight.getTime() + i * slotDurationMs);
-//         const slotEnd = new Date(slotStart.getTime() + slotDurationMs - 1);
-//         slots.push({ start: slotStart, end: slotEnd });
-//     }
-//     return slots;
-// }
+    for (let i = 0; i < (24 * 60) / 30; i++) {
+        const slotStart = new Date(todayMidnight.getTime() + i * slotDurationMs);
+        const slotEnd = new Date(slotStart.getTime() + slotDurationMs - 1);
+        slots.push({ start: slotStart, end: slotEnd });
+    }
+    return slots;
+}
 
 // function getTenMinuteSlots() {
 //     const slots = [];
@@ -226,100 +226,84 @@ async function saveTransactionPayloadsToCSV() {
 //     return slots;
 // }
 
-function getTenSecondSlots() {
-    const slots = [];
-    const now = new Date();
-    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const slotDurationMs = 10 * 1000; // 10 seconds
+// function getTenSecondSlots() {
+//     const slots = [];
+//     const now = new Date();
+//     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+//     const slotDurationMs = 10 * 1000; // 10 seconds
 
-    for (let i = 0; i < (86400 / 10); i++) {
-        const slotStart = new Date(todayMidnight.getTime() + i * slotDurationMs);
-        const slotEnd = new Date(slotStart.getTime() + slotDurationMs - 1);
-        slots.push({ start: slotStart, end: slotEnd });
-    }
+//     for (let i = 0; i < (86400 / 10); i++) {
+//         const slotStart = new Date(todayMidnight.getTime() + i * slotDurationMs);
+//         const slotEnd = new Date(slotStart.getTime() + slotDurationMs - 1);
+//         slots.push({ start: slotStart, end: slotEnd });
+//     }
 
-    return slots;
-}
+//     return slots;
+// }
 
 
 
 async function generateAndSendTransactions(vpa, amount, businessNumber, merchantId, shopName) {
-    const slots = getTenSecondSlots(); // All 48 time ranges for today
-    const amounts = splitAmount(amount); // Split total amount
-    const payloads = [];
 
-    for (let i = 0; i < amounts.length; i++) {
-        const amt = amounts[i];
+    // Create ONE payload only
+    const payload = {
+        KVBData: {
+            ...fixedData,
+            Amount: amount.toString(),
+            PayeeAddr: vpa,
+            MerchantRefID: generateMerchantRefId("REF"),
+            TransDate: new Date().toISOString(),
+            RRN: generateRRN(),
+            UpiTransID: generateUpiTransID(),
+        },
+    };
 
-        // Get slot based on index, or wrap around
-        const slot = slots[i % slots.length];
+    console.log(`\n📌 Sending ONE transaction payload for ${vpa}`);
+    printSection("Payload", payload);
 
-        const payload = {
-            KVBData: {
-                ...fixedData,
-                Amount: amt.toString(),
-                PayeeAddr: vpa,
-                MerchantRefID: generateMerchantRefId("REF"),
-                TransDate: randomDate(slot.start, slot.end),
-                RRN: generateRRN(),
-                UpiTransID: generateUpiTransID(),
-            },
-        };
-        payloads.push(payload);
+    // Save to CSV array
+    transactionPayloads.push({
+        businessNumber,
+        vpa,
+        merchantId,
+        shopName: shopName || 'N/A',
+        amount,
+        merchantRefID: payload.KVBData.MerchantRefID,
+        transDate: payload.KVBData.TransDate,
+        rrn: payload.KVBData.RRN,
+        upiTransID: payload.KVBData.UpiTransID,
+        createdAt: new Date().toISOString(),
+        status: 'Pending',
+        payload: JSON.stringify(payload),
+    });
 
-        // Store payload data for CSV/log
-        transactionPayloads.push({
-            businessNumber,
-            vpa,
-            merchantId,
-            shopName: shopName || 'N/A',
-            amount: amt,
-            merchantRefID: payload.KVBData.MerchantRefID,
-            transDate: payload.KVBData.TransDate,
-            rrn: payload.KVBData.RRN,
-            upiTransID: payload.KVBData.UpiTransID,
-            createdAt: new Date().toISOString(),
-            status: 'Pending',
-            payload: JSON.stringify(payload),
+    // Send to API
+    try {
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
         });
+
+        const isOk = response.ok;
+        transactionPayloads[transactionPayloads.length - 1].status = isOk ? 'Success' : 'Failed';
+
+        console.log(`✔ Status: ${response.status}`);
+
+        return {
+            successCount: isOk ? 1 : 0,
+            failCount: isOk ? 0 : 1,
+            totalPayloads: 1
+        };
+
+    } catch (error) {
+        transactionPayloads[transactionPayloads.length - 1].status = 'Error';
+
+        console.error("❌ Error sending transaction:", error);
+        return { successCount: 0, failCount: 1, totalPayloads: 1 };
     }
-
-    console.log(`✅ Generated ${payloads.length} transaction payloads for ${vpa}`);
-    printSection(`Generated Payloads for ${vpa}`, payloads);
-
-    // Send payloads one by one
-    let successCount = 0;
-    let failCount = 0;
-
-    for (let i = 0; i < payloads.length; i++) {
-        try {
-            const response = await fetch(endpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payloads[i]),
-            });
-
-            const payloadIndex = transactionPayloads.length - payloads.length + i;
-
-            if (response.ok) {
-                transactionPayloads[payloadIndex].status = 'Success';
-                successCount++;
-            } else {
-                transactionPayloads[payloadIndex].status = 'Failed';
-                failCount++;
-            }
-
-            console.log(`✅ Sent payload ${i + 1}/${payloads.length} for ${vpa}: Status ${response.status}`);
-        } catch (error) {
-            const payloadIndex = transactionPayloads.length - payloads.length + i;
-            transactionPayloads[payloadIndex].status = 'Error';
-            failCount++;
-            console.error(`❌ Error sending payload ${i + 1} for ${vpa}:`, error.message);
-        }
-    }
-
-    return { successCount, failCount, totalPayloads: payloads.length };
 }
+
 
 
 // Main function to generate and send transactions
